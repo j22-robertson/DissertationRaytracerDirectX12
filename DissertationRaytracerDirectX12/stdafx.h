@@ -26,28 +26,48 @@ int Width = 800;
 int Height = 800;
 
 
-void mainloop()
-{
-	MSG msg;
-	ZeroMemory(&msg, sizeof(MSG));
+
+const int frameBufferCount = 3; // buffer num, 2 = double buffering 3 = triple
 
 
-	while (true)
-	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			if (msg.message == WM_QUIT)
-			{
-				break;
-			}
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else {
-			//Update loop goes here
-		}
-	}
-}
+ID3D12Device* device;
+
+IDXGISwapChain3* swapChain;
+
+ID3D12CommandQueue* commandQueue;
+
+ID3D12DescriptorHeap* rtvDescriptorHeap; // Holds resources e.g. render targets
+
+ID3D12Resource* renderTargets[frameBufferCount];
+
+ID3D12CommandAllocator* commandAllocator[frameBufferCount];
+
+ID3D12GraphicsCommandList* commandList;
+
+ID3D12Fence* fence[frameBufferCount];
+
+HANDLE fenceEvent;
+
+UINT64 fenceValue[frameBufferCount];
+
+int frameIndex;
+
+int rtvDescriptorSize;
+
+bool InitD3D();
+
+void Update();
+
+void UpdatePipeline();
+
+void Render();
+
+void Cleanup();
+
+void WaitForPreviousFrame();
+
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
@@ -67,78 +87,4 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 
-
-
-bool InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen)
-{
-	if (fullscreen)
-	{
-		HMONITOR hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-
-		MONITORINFO mi = { sizeof(mi) };
-
-		GetMonitorInfo(hmon, &mi);
-
-		width = mi.rcMonitor.right - mi.rcMonitor.left;
-
-		height = mi.rcMonitor.bottom - mi.rcMonitor.top;
-
-	}
-
-		//Window structure setup
-		WNDCLASSEX wc;
-
-		wc.cbSize = sizeof(WNDCLASSEX);
-		wc.style = CS_HREDRAW | CS_VREDRAW;
-		wc.lpfnWndProc = WndProc;
-		wc.cbClsExtra = NULL;
-		wc.cbWndExtra = NULL;
-		wc.hInstance = hInstance;
-		wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-		wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-		wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 2);
-		wc.lpszMenuName = NULL;
-		wc.lpszClassName = WindowName;
-		wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-
-
-
-	
-
-		if (!RegisterClassEx(&wc))
-		{
-			MessageBox(NULL, L"Error registering class", L"Error", MB_OK | MB_ICONERROR);
-			return false;
-		}
-
-
-		hwnd = CreateWindowEx(NULL,
-			WindowName,
-			WindowTitle,
-			WS_OVERLAPPEDWINDOW,
-			CW_USEDEFAULT, CW_USEDEFAULT,
-			width, height,
-			NULL,
-			NULL,
-			hInstance,
-			NULL);
-
-		if (!hwnd)
-		{
-			MessageBox(NULL, L"Error creating window", L"Error", MB_OK | MB_ICONERROR);
-			return false;
-		}
-
-		if (fullscreen)
-		{
-			SetWindowLong(hwnd, GWL_STYLE, 0);
-		}
-
-		ShowWindow(hwnd, ShowWnd);
-		UpdateWindow(hwnd);
-
-		return true;
-
-	
-}
 
