@@ -11,6 +11,20 @@
 #include <DirectXMath.h>
 #include "d3dx12.h"
 
+
+
+//#define IID_PPV_ARGS(ppType) __uuidof(**(ppType)), IID_PPV_ARGS_Helper(ppType)
+/*
+template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** IID_PPV_ARGS_Helper(T * *pp)
+{
+#pragma prefast(suppress:6269, "Tool issue with unused static_cast")
+	static_cast<IUnknown*>(*pp);
+	return reinterpret_cast<void*>(pp)
+}
+*/
+#define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
+
+
 //Window Handle
 HWND hwnd = NULL;
 
@@ -23,9 +37,12 @@ LPCTSTR WindowName = L"Raytracer";
 LPCTSTR WindowTitle = L"Raytracer";
 
 int Width = 800;
-int Height = 800;
+int Height = 600;
 
 
+bool FullScreen = false;
+
+bool Running = true;
 
 const int frameBufferCount = 3; // buffer num, 2 = double buffering 3 = triple
 
@@ -62,10 +79,9 @@ void UpdatePipeline();
 
 void Render();
 
-void Cleanup();
 
 void WaitForPreviousFrame();
-
+void Cleanup();
 
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -85,6 +101,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return DefWindowProc(hWnd, msg, wParam, lParam);
 
 }
+
+
+
 
 
 
