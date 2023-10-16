@@ -25,6 +25,10 @@ template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** I
 #define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
 
 
+struct Vertex {
+	DirectX::XMFLOAT3 pos;
+};
+
 //Window Handle
 HWND hwnd = NULL;
 
@@ -72,6 +76,18 @@ UINT64 fenceValue[frameBufferCount];
 int frameIndex;
 
 int rtvDescriptorSize;
+
+ID3D12PipelineState* pipelineStateObject;
+
+ID3D12RootSignature* rootSignature;
+
+D3D12_VIEWPORT viewport;
+
+D3D12_RECT scissorRect;
+
+ID3D12Resource* vertexBuffer;
+
+D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
 
 bool InitD3D();
 
