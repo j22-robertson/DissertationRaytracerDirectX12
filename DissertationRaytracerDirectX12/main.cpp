@@ -183,6 +183,7 @@ bool InitD3D()
 
 	if (FAILED(hr))
 	{
+		MessageBox(0, L"Failed to create Device", L"Error", MB_OK);
 		return false;
 	}
 
@@ -197,6 +198,7 @@ bool InitD3D()
 
 	if (FAILED(hr))
 	{
+		MessageBox(0, L"Failed to create Command Queue", L"Error", MB_OK);
 		return false;
 	}
 
@@ -221,7 +223,7 @@ bool InitD3D()
 
 	IDXGISwapChain* tempSwapChain;
 
-	hr = dxgiFactory->CreateSwapChain(
+	dxgiFactory->CreateSwapChain(
 		commandQueue,
 		&swapChainDesc,
 		&tempSwapChain
@@ -242,6 +244,7 @@ bool InitD3D()
 	hr = device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvDescriptorHeap));
 	if (FAILED(hr))
 	{
+		MessageBox(0, L"Failed to create Descriptor heap", L"Error", MB_OK);
 		return false;
 	}
 
@@ -263,12 +266,21 @@ bool InitD3D()
 
 		rtvHandle.Offset(1, rtvDescriptorSize);
 	}
+	for (int i = 0; i < frameBufferCount; i++)
+	{
+		hr = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator[i]));
+		if (FAILED(hr))
+		{
+			return false;
+		}
+	}
 
 
 	hr = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator[0], NULL, IID_PPV_ARGS(&commandList));
 
 	if (FAILED(hr))
 	{
+		MessageBox(0, L"Failed to create Command List", L"Error", MB_OK);
 		return false;
 	}
 
@@ -344,8 +356,11 @@ void UpdatePipeline() {
 void WaitForPreviousFrame() {
 
 	HRESULT hr;
-
+	
+	
 	frameIndex = swapChain->GetCurrentBackBufferIndex();
+	
+	
 
 	if (fence[frameIndex]->SetEventOnCompletion(fenceValue[frameIndex], fenceEvent))
 	{
@@ -363,6 +378,8 @@ void WaitForPreviousFrame() {
 	fenceValue[frameIndex]++;
 }
 void Cleanup() {
+
+	tempBool = true;
 	for (int i = 0; i < frameBufferCount; i++)
 	{
 		frameIndex = i;

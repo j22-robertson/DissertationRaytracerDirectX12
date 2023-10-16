@@ -44,6 +44,8 @@ bool FullScreen = false;
 
 bool Running = true;
 
+bool tempBool = true;
+
 const int frameBufferCount = 3; // buffer num, 2 = double buffering 3 = triple
 
 
