@@ -156,7 +156,7 @@ bool InitD3D()
 
 		if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
 		{
-			adapterIndex++;
+				adapterIndex++;
 			continue;
 		}
 
@@ -188,6 +188,9 @@ bool InitD3D()
 
 
 	D3D12_COMMAND_QUEUE_DESC commandQueueDesc = {};
+
+	commandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	commandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
 
 	hr = device->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueue));
@@ -224,10 +227,7 @@ bool InitD3D()
 		&tempSwapChain
 	);
 
-	if (FAILED(hr))
-	{
-		return false;
-	}
+
 
 	swapChain = static_cast<IDXGISwapChain3*>(tempSwapChain);
 
