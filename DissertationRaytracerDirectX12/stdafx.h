@@ -10,6 +10,7 @@
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
 #include "d3dx12.h"
+#include <string>
 
 
 
@@ -25,9 +26,6 @@ template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** I
 #define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
 
 
-struct Vertex {
-	DirectX::XMFLOAT3 pos;
-};
 
 //Window Handle
 HWND hwnd = NULL;
