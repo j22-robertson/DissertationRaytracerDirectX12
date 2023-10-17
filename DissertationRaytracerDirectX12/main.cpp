@@ -23,6 +23,7 @@ bool InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, b
 
 	}
 
+
 	//Window structure setup
 	WNDCLASSEX wc;
 
@@ -100,6 +101,8 @@ void mainloop()
 			DispatchMessage(&msg);
 		}
 		else {
+		
+			Render();
 			//Update loop goes here
 		}
 	}
@@ -155,7 +158,6 @@ bool InitD3D()
 
 		if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
 		{
-				adapterIndex++;
 			continue;
 		}
 
@@ -241,6 +243,7 @@ bool InitD3D()
 	rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
 	hr = device->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&rtvDescriptorHeap));
+
 	if (FAILED(hr))
 	{
 		MessageBox(0, L"Failed to create Descriptor heap", L"Error", MB_OK);
@@ -265,6 +268,8 @@ bool InitD3D()
 
 		rtvHandle.Offset(1, rtvDescriptorSize);
 	}
+
+
 	for (int i = 0; i < frameBufferCount; i++)
 	{
 		hr = device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&commandAllocator[i]));
@@ -275,7 +280,7 @@ bool InitD3D()
 	}
 
 
-	hr = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator[0], NULL, IID_PPV_ARGS(&commandList));
+	hr = device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, commandAllocator[frameIndex], NULL, IID_PPV_ARGS(&commandList));
 
 	if (FAILED(hr))
 	{
@@ -283,7 +288,7 @@ bool InitD3D()
 		return false;
 	}
 
-	commandList->Close();
+	//commandList->Close();
 
 	for (int i = 0; i < frameBufferCount; i++)
 	{
@@ -380,7 +385,7 @@ bool InitD3D()
 	/// INPUT LAYOUT
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-		{"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}
 	};
 
 
@@ -388,7 +393,6 @@ bool InitD3D()
 
 	inputLayoutDesc.NumElements = sizeof(inputLayout) / sizeof(D3D12_INPUT_ELEMENT_DESC);
 	inputLayoutDesc.pInputElementDescs = inputLayout;
-
 
 	// Pipeline state object
 
@@ -422,7 +426,7 @@ bool InitD3D()
 	Vertex vList[] = {
 		{{0.0f,0.5f,0.5f}},
 		{{0.5f,-0.5f,0.5f} },
-		{{-0.5f,-0.5f,0.5f}}
+		{{-0.5f,-0.5f,0.5f}},
 	};
 
 
@@ -443,12 +447,13 @@ bool InitD3D()
 
 	vertexBuffer->SetName(L"Vertex Buffer Resource Heap");
 
-	ID3D12Resource* vBufferUploadHeap;
+
 
 
 	//CREATE UPLOAD HEAP
 	// USED TO UPLOAD DATA TO GPU, CPU WRITES GPU READS
 
+	ID3D12Resource* vBufferUploadHeap;
 	//FIX LVALUE
 	auto vbuffer_heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
@@ -538,7 +543,7 @@ void UpdatePipeline() {
 	}
 
 
-	hr = commandList->Reset(commandAllocator[frameIndex], NULL);
+	hr = commandList->Reset(commandAllocator[frameIndex], pipelineStateObject);
 
 	if (FAILED(hr))
 	{
@@ -556,11 +561,8 @@ void UpdatePipeline() {
 	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
 	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-
-
 	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	
-
 	commandList->SetGraphicsRootSignature(rootSignature);
 	commandList->RSSetViewports(1, &viewport);
 	commandList->RSSetScissorRects(1, &scissorRect);
@@ -624,9 +626,7 @@ void Cleanup() {
 	SAFE_RELEASE(commandQueue);
 	SAFE_RELEASE(rtvDescriptorHeap);
 	SAFE_RELEASE(commandList);
-	SAFE_RELEASE(pipelineStateObject);
-	SAFE_RELEASE(rootSignature);
-	SAFE_RELEASE(vertexBuffer);
+	
 
 	for (int i = 0; i < frameBufferCount; ++i)
 	{
@@ -634,6 +634,9 @@ void Cleanup() {
 		SAFE_RELEASE(commandAllocator[i]);
 		SAFE_RELEASE(fence[i])
 	};
+	SAFE_RELEASE(pipelineStateObject);
+	SAFE_RELEASE(rootSignature);
+	SAFE_RELEASE(vertexBuffer);
 }
 
 

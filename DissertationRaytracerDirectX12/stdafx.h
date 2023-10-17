@@ -25,8 +25,6 @@ template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** I
 */
 #define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
 
-
-
 //Window Handle
 HWND hwnd = NULL;
 
