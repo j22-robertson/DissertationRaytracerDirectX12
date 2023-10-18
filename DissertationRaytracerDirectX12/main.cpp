@@ -778,9 +778,46 @@ AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microso
 	bottomLevelAS.Generate(commandList, buffers.pScratch.Get(), buffers.pResult.Get(), false, nullptr);
 
 
+	return buffers;
 
 }
 
+void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances ) {
+
+	// INSTANCES IS PAIR OF BLAS AND MATRIX OF THE INSTANCE
+
+	for (size_t i = 0; i < instances.size(); i++)
+	{
+		topLevelASGenerator.AddInstance(
+			instances[i].first.Get(),
+			instances[i].second,
+			static_cast<UINT>(i),
+			static_cast<UINT>(0)
+			);
+	}
+
+
+	// Just like BLAS requires scratch space in addition to actual AS
+	// Unlike BLAS with TLAS instance descriptors need to be stored in GPU memory
+	// this call outputs memory requirements for each (scratch, results, instance descriptors) so that the correct amount of memory can be allocated
+
+
+	UINT64 scratchSize, resultSize, instanceDescSize;
+
+	topLevelASGenerator.ComputeASBufferSizes(device, true, &scratchSize, &resultSize, &instanceDescSize);
+
+	topLevelASBuffers.pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nv_helpers_dx12::kDefaultHeapProps);
+
+	topLevelASBuffers.pResult = nv_helpers_dx12::CreateBuffer(device, resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
+
+	topLevelASBuffers.pInstanceDesc = nv_helpers_dx12::CreateBuffer(device, instanceDescSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+	topLevelASGenerator.Generate(commandList, topLevelASBuffers.pScratch.Get(), topLevelASBuffers.pResult.Get(), topLevelASBuffers.pInstanceDesc.Get());
+
+
+
+
+}
 
 
 
