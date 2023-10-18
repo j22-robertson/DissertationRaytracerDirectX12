@@ -91,23 +91,48 @@ void mainloop()
 	ZeroMemory(&msg, sizeof(MSG));
 
 
-	while (true)
+	while (msg.message != WM_QUIT)
 	{
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			if (msg.message == WM_QUIT)
-			{
-				break;
-			}
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 		else {
-		
+
 			Render();
 			//Update loop goes here
 		}
 	}
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_KEYUP:
+		{
+			OnKeyUp(static_cast<UINT8>(wParam));
+
+			return 0;
+		}
+	case WM_KEYDOWN:
+		{
+			if (wParam == VK_ESCAPE) {
+				if (MessageBox(0, L"Are you sure you want to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+					DestroyWindow(hWnd);
+			}
+			return 0;
+		}
+	case WM_DESTROY:
+		{
+			PostQuitMessage(0);
+			return 0;
+		}
+
+	}
+	return DefWindowProc(hWnd, msg, wParam, lParam);
+
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
@@ -496,6 +521,14 @@ bool InitD3D()
 
 	commandList->ResourceBarrier(1, &rbtemp);
 
+	CheckRayTracingSupport();
+
+
+
+
+
+
+
 	commandList->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { commandList };
@@ -531,7 +564,6 @@ bool InitD3D()
 
 
 
-	CheckRayTracingSupport();
 
 	return true;
 
@@ -567,15 +599,25 @@ void UpdatePipeline() {
 
 	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
-	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-	
-	commandList->SetGraphicsRootSignature(rootSignature);
-	commandList->RSSetViewports(1, &viewport);
-	commandList->RSSetScissorRects(1, &scissorRect);
-	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-	commandList->DrawInstanced(3, 1, 0, 0);
+	if (m_raster)
+	{
+		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
+		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+		commandList->SetGraphicsRootSignature(rootSignature);
+		commandList->RSSetViewports(1, &viewport);
+		commandList->RSSetScissorRects(1, &scissorRect);
+		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+		commandList->DrawInstanced(3, 1, 0, 0);
+
+	}
+	else {
+		const float clearColor[] = { 0.6f,0.8f,0.4f,0.1f };
+
+		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	}
+
 
 
 	auto rb2 = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -692,5 +734,19 @@ void CheckRayTracingSupport()
 	{
 		MessageBox(hwnd, L"Unable to support raytracing", L"Error", MB_OK);
 
+	}
+}
+
+
+
+
+
+
+
+void OnKeyUp(UINT8 key)
+{
+	if (key == VK_UP)
+	{
+		m_raster = !m_raster;
 	}
 }

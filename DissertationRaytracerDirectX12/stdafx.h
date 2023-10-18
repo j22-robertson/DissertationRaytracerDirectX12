@@ -84,7 +84,7 @@ D3D12_RECT scissorRect;
 ID3D12Resource* vertexBuffer;
 
 D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
-
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 bool InitD3D();
 
 void Update();
@@ -99,28 +99,9 @@ void Cleanup();
 
 void CheckRayTracingSupport();
 
+void OnKeyUp(UINT8 key);
 
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	switch (msg)
-	{
-	case WM_KEYDOWN:
-		if (wParam == VK_ESCAPE) {
-			if (MessageBox(0, L"Are you sure you wnat to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
-				DestroyWindow(hWnd);
-		}
-	case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-
-	}
-	return DefWindowProc(hWnd, msg, wParam, lParam);
-
-}
-
-
-
-
+bool m_raster = true;
 
 
