@@ -14,6 +14,7 @@
 #include <dxcapi.h>
 #include <vector>
 #include "TopLevelASGenerator.h"
+#include <wrl/client.h>
 
 
 
@@ -28,6 +29,9 @@ template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** I
 }
 */
 #define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
+
+
+
 
 //Window Handle
 HWND hwnd = NULL;
@@ -88,6 +92,44 @@ D3D12_RECT scissorRect;
 ID3D12Resource* vertexBuffer;
 
 D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+
+//RAYTRACING STUFF
+
+ID3D12Resource* bottomLevelAS;
+
+nv_helpers_dx12::TopLevelASGenerator topLevelASGenerator;
+
+
+struct AccelerationStructureBuffers
+{
+	Microsoft::WRL::ComPtr<ID3D12Resource> pScratch;
+	Microsoft::WRL::ComPtr<ID3D12Resource> pResult;
+	Microsoft::WRL::ComPtr<ID3D12Resource> pInstanceDesc;
+};
+
+
+AccelerationStructureBuffers topLevelASBuffers;
+
+std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>> instances;
+
+
+
+AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers);
+
+
+void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances);
+
+
+
+
+
+void CreateAccelerationStructures();
+
+
+
+
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 bool InitD3D();
 

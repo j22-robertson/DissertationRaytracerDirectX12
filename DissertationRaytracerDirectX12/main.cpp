@@ -525,7 +525,7 @@ bool InitD3D()
 
 	CheckRayTracingSupport();
 
-
+	CreateAccelerationStructures();
 
 
 
@@ -818,6 +818,46 @@ void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12R
 
 
 }
+
+void CreateAccelerationStructures()
+{
+	HRESULT hr;
+
+	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 3 } });
+
+
+	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()} };
+
+	CreateTopLevelAS(instances);
+
+	commandList->Close();
+
+	ID3D12CommandList* ppCommandLists[] = { commandList };
+
+	commandQueue->ExecuteCommandLists(1, ppCommandLists);
+
+	fenceValue[frameIndex]++;
+
+	commandQueue->Signal(*fence, fenceValue[frameIndex]);
+
+	fence[frameIndex]->SetEventOnCompletion(fenceValue[frameIndex], fenceEvent);
+	
+	WaitForSingleObject(fenceEvent, INFINITE);
+
+	hr = commandList->Reset(*commandAllocator, pipelineStateObject);
+
+
+	if (FAILED(hr))
+	{
+		MessageBox(hwnd, L"Unable to reset command allocator in CreateAccelerationStructures", L"Error", MB_OK);
+		return;
+	}
+
+
+	bottomLevelAS = bottomLevelBuffers.pResult.Get();
+
+}
+
 
 
 

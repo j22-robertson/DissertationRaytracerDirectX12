@@ -8,10 +8,32 @@
 #include <sstream>
 #include <string>
 #include <d3d12.h>
-#include "DXSampleHelper.h"
 #include <dxcapi.h>
 
 #include <vector>
+
+class HrException : public std::runtime_error
+{
+    inline std::string HrToString(HRESULT hr)
+    {
+        char s_str[64] = {};
+        sprintf_s(s_str, "HRESULT of 0x%08X", static_cast<UINT>(hr));
+        return std::string(s_str);
+    }
+public:
+    HrException(HRESULT hr) : std::runtime_error(HrToString(hr)), m_hr(hr) {}
+    HRESULT Error() const { return m_hr; }
+private:
+    const HRESULT m_hr;
+};
+inline void ThrowIfFailed(HRESULT hr, const wchar_t* msg)
+{
+    if (FAILED(hr))
+    {
+        OutputDebugString(msg);
+        throw HrException(hr);
+    }
+}
 
 namespace nv_helpers_dx12
 {
@@ -38,7 +60,7 @@ inline ID3D12Resource* CreateBuffer(ID3D12Device* m_device, uint64_t size,
 
   ID3D12Resource* pBuffer;
   ThrowIfFailed(m_device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufDesc,
-                                                  initState, nullptr, IID_PPV_ARGS(&pBuffer)));
+                                                  initState, nullptr, IID_PPV_ARGS(&pBuffer)),L"Failed to create committed resource in DXRHelper L64");
   return pBuffer;
 }
 
@@ -59,7 +81,7 @@ static const D3D12_HEAP_PROPERTIES kDefaultHeapProps = {
 //--------------------------------------------------------------------------------------------------
 // Compile a HLSL file into a DXIL library
 //
-IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
+inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 {
   static IDxcCompiler* pCompiler = nullptr;
   static IDxcLibrary* pLibrary = nullptr;
@@ -70,9 +92,9 @@ IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
   // Initialize the DXC compiler and compiler helper
   if (!pCompiler)
   {
-    ThrowIfFailed(DxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void **)&pCompiler));
-    ThrowIfFailed(DxcCreateInstance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void **)&pLibrary));
-    ThrowIfFailed(pLibrary->CreateIncludeHandler(&dxcIncludeHandler));
+    ThrowIfFailed(DxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void **)&pCompiler),L"Unable to createDX compiler instance");
+    ThrowIfFailed(DxcCreateInstance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void **)&pLibrary),L"Unable to create DX library instance");
+    ThrowIfFailed(pLibrary->CreateIncludeHandler(&dxcIncludeHandler),L"Unable to create include handler");
   }
   // Open and read the file
   std::ifstream shaderFile(fileName);
@@ -87,16 +109,16 @@ IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
   // Create blob from the string
   IDxcBlobEncoding* pTextBlob;
   ThrowIfFailed(pLibrary->CreateBlobWithEncodingFromPinned(
-      (LPBYTE)sShader.c_str(), (uint32_t)sShader.size(), 0, &pTextBlob));
+      (LPBYTE)sShader.c_str(), (uint32_t)sShader.size(), 0, &pTextBlob),L"Failed to create blob DXRHelper L113");
 
   // Compile
   IDxcOperationResult* pResult;
   ThrowIfFailed(pCompiler->Compile(pTextBlob, fileName, L"", L"lib_6_3", nullptr, 0, nullptr, 0,
-                                   dxcIncludeHandler, &pResult));
+                                   dxcIncludeHandler, &pResult),L"Failed to compile DXRHelper L117");
 
   // Verify the result
   HRESULT resultCode;
-  ThrowIfFailed(pResult->GetStatus(&resultCode));
+  ThrowIfFailed(pResult->GetStatus(&resultCode),L"Failed to verify result code in DXRHelper L122");
   if (FAILED(resultCode))
   {
     IDxcBlobEncoding* pError;
@@ -119,7 +141,7 @@ IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
   }
 
   IDxcBlob* pBlob;
-  ThrowIfFailed(pResult->GetResult(&pBlob));
+  ThrowIfFailed(pResult->GetResult(&pBlob),L"Failed to create blob in DXRHelper L145");
   return pBlob;
 }
 
@@ -136,13 +158,14 @@ ID3D12DescriptorHeap* CreateDescriptorHeap(ID3D12Device* device, uint32_t count,
       shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
   ID3D12DescriptorHeap* pHeap;
-  ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pHeap)));
+  ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pHeap)), L"Failed to create descriptor heap in DXRHelper L162");
   return pHeap;
 }
 
 //--------------------------------------------------------------------------------------------------
 //
 //
+/*
 template <class Vertex>
 void GenerateMengerSponge(int32_t level, float probability, std::vector<Vertex>& outputVertices,
                           std::vector<UINT>& outputIndices)
@@ -304,5 +327,5 @@ void GenerateMengerSponge(int32_t level, float probability, std::vector<Vertex>&
     c.enqueueVertices(outputVertices, outputIndices);
   }
 }
-
+*/
 } // namespace nv_helpers_dx12
