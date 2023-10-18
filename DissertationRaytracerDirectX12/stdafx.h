@@ -49,7 +49,7 @@ bool tempBool = true;
 const int frameBufferCount = 3; // buffer num, 2 = double buffering 3 = triple
 
 
-ID3D12Device* device;
+ID3D12Device5* device;
 
 IDXGISwapChain3* swapChain;
 
@@ -61,7 +61,7 @@ ID3D12Resource* renderTargets[frameBufferCount];
 
 ID3D12CommandAllocator* commandAllocator[frameBufferCount];
 
-ID3D12GraphicsCommandList* commandList;
+ID3D12GraphicsCommandList4* commandList;
 
 ID3D12Fence* fence[frameBufferCount];
 
@@ -96,6 +96,9 @@ void Render();
 
 void WaitForPreviousFrame();
 void Cleanup();
+
+void CheckRayTracingSupport();
+
 
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)

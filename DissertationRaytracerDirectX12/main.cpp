@@ -529,6 +529,10 @@ bool InitD3D()
 	scissorRect.right = Width;
 	scissorRect.bottom = Height;
 
+
+
+	CheckRayTracingSupport();
+
 	return true;
 
 }
@@ -668,5 +672,25 @@ void Render() {
 	if (FAILED(hr))
 	{
 		Running = false;
+	}
+}
+
+
+
+void CheckRayTracingSupport()
+{
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
+
+	HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
+
+	if (FAILED(hr))
+	{
+		MessageBox(hwnd, L"Unable to check feature support", L"Error", MB_OK);
+	}
+
+	if (options5.RaytracingTier < D3D12_RAYTRACING_TIER_1_0)
+	{
+		MessageBox(hwnd, L"Unable to support raytracing", L"Error", MB_OK);
+
 	}
 }
