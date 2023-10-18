@@ -11,6 +11,10 @@
 #include <DirectXMath.h>
 #include "d3dx12.h"
 #include <string>
+#include <dxcapi.h>
+#include <vector>
+#include "TopLevelASGenerator.h"
+
 
 
 

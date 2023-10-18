@@ -1,4 +1,6 @@
 #include "stdafx.h"
+#include "DXRHelper.h"
+#include "BottomLevelASGenerator.h"
 
 struct Vertex {
 	Vertex(float x, float y, float z, float r, float g, float b, float a) : pos(x, y, z), color(r, g, b, a) {}
@@ -738,7 +740,46 @@ void CheckRayTracingSupport()
 }
 
 
+AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers)
+{
 
+	nv_helpers_dx12::BottomLevelASGenerator bottomLevelAS;
+
+	// add all vertex buffers
+
+
+	for (const auto& buffer : vVertexBuffers)
+	{
+		bottomLevelAS.AddVertexBuffer(buffer.first.Get(), 0, buffer.second, sizeof(Vertex), 0, 0);
+	}
+
+	//Creating BLAS requires "scratch space" for temporary info, size of scratch memory depends on scene complexity
+
+	UINT64 scratchSizeInbytes = 0;
+
+	//final AS needs to be stored, similar to existing vertex buffers. Size of AS depends on scene complexity
+
+	UINT64 resultSizeInBytes = 0;
+
+	bottomLevelAS.ComputeASBufferSizes(device, false, &scratchSizeInbytes, &resultSizeInBytes);
+
+	// Allocate necessary buffers directly on the default heap (GPU)
+
+	AccelerationStructureBuffers buffers;
+
+	buffers.pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSizeInbytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON, nv_helpers_dx12::kDefaultHeapProps);
+
+	buffers.pResult = nv_helpers_dx12::CreateBuffer(device, resultSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
+
+
+	// Finally we can build the acceleration structure NOTE: THIS CALL INTEGRATES A RESOURCE BARRIER ON THE GENERATED AS
+	// This is done so that the BLAS can be used to compute a TLAS after this method.
+
+	bottomLevelAS.Generate(commandList, buffers.pScratch.Get(), buffers.pResult.Get(), false, nullptr);
+
+
+
+}
 
 
 
