@@ -1,6 +1,12 @@
 #include "stdafx.h"
 #include "DXRHelper.h"
 #include "BottomLevelASGenerator.h"
+#include "RaytracingPipelineGenerator.h"
+#include "RootSignatureGenerator.h"
+
+
+
+
 
 struct Vertex {
 	Vertex(float x, float y, float z, float r, float g, float b, float a) : pos(x, y, z), color(r, g, b, a) {}
@@ -858,6 +864,44 @@ void CreateAccelerationStructures()
 
 }
 
+ComPtr<ID3D12RootSignature> CreateRayGenSignature()
+{
+
+	nv_helpers_dx12::RootSignatureGenerator rsc;
+
+	rsc.AddHeapRangesParameter(
+		{
+			{
+				0,/* u0*/
+				1, /*descriptor*/
+				0, /*Register space 0*/
+				D3D12_DESCRIPTOR_RANGE_TYPE_UAV, /*UAV representing the output buffer*/
+				0 /*t0 */
+			},
+		{
+			0,/*t0*/
+			1,
+			0,
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*TLAS*/
+			1
+		} });
+
+	return rsc.Generate(device, true);
+}
+
+ComPtr<ID3D12RootSignature> CreateHitSignature()
+{
+	nv_helpers_dx12::RootSignatureGenerator rsc;
+
+	return rsc.Generate(device, true);
+}
+
+ComPtr<ID3D12RootSignature> CreateMissSignature()
+{
+	nv_helpers_dx12::RootSignatureGenerator rsc;
+
+	return rsc.Generate(device, true);
+}
 
 
 

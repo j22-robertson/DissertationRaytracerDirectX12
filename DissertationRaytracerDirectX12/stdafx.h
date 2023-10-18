@@ -16,6 +16,7 @@
 #include "TopLevelASGenerator.h"
 #include <wrl/client.h>
 
+using Microsoft::WRL::ComPtr;
 
 
 
@@ -144,6 +145,31 @@ void WaitForPreviousFrame();
 void Cleanup();
 
 void CheckRayTracingSupport();
+
+ComPtr<ID3D12RootSignature> CreateRayGenSignature();
+
+ComPtr<ID3D12RootSignature> CreateMissSignature();
+
+ComPtr<ID3D12RootSignature> CreateHitSignature();
+void CreateRaytracingPipeline();
+
+
+
+ComPtr<IDxcBlob> rayGenLibrary;
+ComPtr<IDxcBlob> hitLibrary;
+ComPtr<IDxcBlob> missLibrary;
+
+
+ComPtr<ID3D12RootSignature> rayGenSignature;
+ComPtr<ID3D12RootSignature> HitSignature;
+ComPtr<ID3D12RootSignature> missSignature;
+
+
+ComPtr<ID3D12StateObject> rtStateObject;
+
+ComPtr<ID3D12StateObjectProperties> rtStateObjectProps;
+
+
 
 void OnKeyUp(UINT8 key);
 
