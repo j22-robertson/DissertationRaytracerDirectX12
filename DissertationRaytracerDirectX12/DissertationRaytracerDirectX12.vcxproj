@@ -113,6 +113,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -138,11 +139,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BottomLevelASGenerator.h" />
     <ClInclude Include="d3dx12.h" />
+    <ClInclude Include="DXRHelper.h" />
+    <ClInclude Include="RaytracingPipelineGenerator.h" />
+    <ClInclude Include="RootSignatureGenerator.h" />
+    <ClInclude Include="ShaderBindingTableGenerator.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="TopLevelASGenerator.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BottomLevelASGenerator.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="RaytracingPipelineGenerator.cpp" />
+    <ClCompile Include="RootSignatureGenerator.cpp" />
+    <ClCompile Include="ShaderBindingTableGenerator.cpp" />
+    <ClCompile Include="TopLevelASGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
