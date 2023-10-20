@@ -8,10 +8,12 @@
 #include <sstream>
 #include <string>
 #include <d3d12.h>
+//#pragma comment(lib, "dxcompiler.lib")
 #include <dxcapi.h>
-
 #include <vector>
-
+//#include <d3dcompiler.h>
+//#pragma comment(lib, "d3d12.lib") // Could do this in project settings perhaps
+//#pragma comment(lib, "D3DCompiler.lib") // ""
 class HrException : public std::runtime_error
 {
     inline std::string HrToString(HRESULT hr)
@@ -92,6 +94,9 @@ inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
   // Initialize the DXC compiler and compiler helper
   if (!pCompiler)
   {
+     // DxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**)&pCompiler);
+      //DxcCreateInstance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void**)&pLibrary);
+     // pLibrary->CreateIncludeHandler(&dxcIncludeHandler);
     ThrowIfFailed(DxcCreateInstance(CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void **)&pCompiler),L"Unable to createDX compiler instance");
     ThrowIfFailed(DxcCreateInstance(CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void **)&pLibrary),L"Unable to create DX library instance");
     ThrowIfFailed(pLibrary->CreateIncludeHandler(&dxcIncludeHandler),L"Unable to create include handler");
