@@ -83,6 +83,7 @@ static const D3D12_HEAP_PROPERTIES kDefaultHeapProps = {
 //--------------------------------------------------------------------------------------------------
 // Compile a HLSL file into a DXIL library
 //
+
 inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 {
   static IDxcCompiler* pCompiler = nullptr;
@@ -154,19 +155,18 @@ inline IDxcBlob* CompileShaderLibrary(LPCWSTR fileName)
 //
 //
 ID3D12DescriptorHeap* CreateDescriptorHeap(ID3D12Device* device, uint32_t count,
-                                           D3D12_DESCRIPTOR_HEAP_TYPE type, bool shaderVisible)
+    D3D12_DESCRIPTOR_HEAP_TYPE type, bool shaderVisible)
 {
-  D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-  desc.NumDescriptors = count;
-  desc.Type = type;
-  desc.Flags =
-      shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.NumDescriptors = count;
+    desc.Type = type;
+    desc.Flags =
+        shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
-  ID3D12DescriptorHeap* pHeap;
-  ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pHeap)), L"Failed to create descriptor heap in DXRHelper L162");
-  return pHeap;
+    ID3D12DescriptorHeap* pHeap;
+    ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&pHeap)), L"Failed to create descriptor heap in DXRHelper L162");
+    return pHeap;
 }
-
 //--------------------------------------------------------------------------------------------------
 //
 //

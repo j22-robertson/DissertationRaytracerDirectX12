@@ -3,6 +3,7 @@
 #include "BottomLevelASGenerator.h"
 #include "RaytracingPipelineGenerator.h"
 #include "RootSignatureGenerator.h"
+#include "DXRHelper.h"
 
 
 
@@ -534,8 +535,15 @@ bool InitD3D()
 	CreateAccelerationStructures();
 
 
+	CreateRaytracingPipeline();
 
 
+
+	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
+	CreateRaytracingOutputBuffer();
+
+	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
+	CreateShaderResourceheap();
 
 	commandList->Close();
 
@@ -904,7 +912,126 @@ ComPtr<ID3D12RootSignature> CreateMissSignature()
 }
 
 
+void CreateRaytracingPipeline()
+{
+	nv_helpers_dx12::RayTracingPipelineGenerator pipeline(device);
 
+
+	rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"RayGen.hlsl");
+	missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Miss.hlsl");
+	hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Hit.hlsl");
+
+
+
+	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen.hlsl" });
+	pipeline.AddLibrary(missLibrary.Get(), { L"Miss.hlsl" });
+	pipeline.AddLibrary(hitLibrary.Get(), { L"Hit.hlsl" });
+
+
+	rayGenSignature = CreateRayGenSignature();
+	missSignature = CreateMissSignature();
+	hitSignature = CreateHitSignature();
+
+
+	/// <summary>
+	/// 3 different shaders can be executed to obtain intersections
+	///
+	///	an intersection shader is called:
+	///	- when hitting bounding box of geometry
+	///	- any-hit shader
+	///	- closest hit shader invoked on intersection point near ray origin
+	///
+	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
+	/// </summary>
+
+	pipeline.AddHitGroup(L"HitGroup", { L"ClosestHit" });
+
+	
+	// Associate rootsignature with corresponding shader
+
+	//
+	//
+	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), { L"RayGen" });
+	pipeline.AddRootSignatureAssociation(missSignature.Get(), { L"Miss" });
+	pipeline.AddRootSignatureAssociation(hitSignature.Get(), { L"HitGroup" });
+
+
+	pipeline.SetMaxPayloadSize(4 * sizeof(float)); /// RGB + DISTANCE
+	pipeline.SetMaxAttributeSize(2 * sizeof(float)); // Barycentric coordinates
+
+
+	// Raytracing can shoot rays from existing points leading to nested TraceRay function calls.
+
+	// Trace Depth: 1 means only primary/initial rays are taken into account
+	// Recursion should be kept to a minimum
+
+	//path tracing algorithms can be flattened into a simple loop in ray generation
+
+	pipeline.SetMaxRecursionDepth(1);
+
+	rtStateObject = pipeline.Generate();
+
+	ThrowIfFailed(rtStateObject->QueryInterface(IID_PPV_ARGS(&rtStateObjectProps)),L"Unable to create raytracing pipeline");
+
+}
+void CreateRaytracingOutputBuffer()
+{
+	D3D12_RESOURCE_DESC resDesc{ };
+
+	resDesc.DepthOrArraySize = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	/// Backbuffer is actually formatted as DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+	///	sRGB formats like the backbuffer are unable to be used with UAVs,
+	///	for accuracy we convert to sRGB ourselves in the shader
+
+
+	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	resDesc.Width = Width;
+	resDesc.Height = Height;
+
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+	resDesc.MipLevels = 1;
+
+	resDesc.SampleDesc.Count = 1;
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		&nv_helpers_dx12::kDefaultHeapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&outputResource)),L"Unable to create image output buffer");
+
+
+
+
+}
+void CreateShaderResourceheap()
+{
+	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
+
+	// The Create X view methods write the view info directly into srvHandle
+	UAVDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+	device->CreateUnorderedAccessView(outputResource.Get(), nullptr, &UAVDesc, srvHandle);
+
+	// Add TLAS shader resource view after raytracing output buffer
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
+
+	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+
+
+}
 void OnKeyUp(UINT8 key)
 {
 	if (key == VK_UP)

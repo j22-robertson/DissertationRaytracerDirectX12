@@ -153,6 +153,12 @@ ComPtr<ID3D12RootSignature> CreateMissSignature();
 ComPtr<ID3D12RootSignature> CreateHitSignature();
 void CreateRaytracingPipeline();
 
+void CreateRaytracingOutputBuffer();
+
+void CreateShaderResourceheap();
+
+ComPtr<ID3D12Resource> outputResource;
+ComPtr<ID3D12DescriptorHeap> srvUAVHeap;
 
 
 ComPtr<IDxcBlob> rayGenLibrary;
@@ -161,7 +167,7 @@ ComPtr<IDxcBlob> missLibrary;
 
 
 ComPtr<ID3D12RootSignature> rayGenSignature;
-ComPtr<ID3D12RootSignature> HitSignature;
+ComPtr<ID3D12RootSignature> hitSignature;
 ComPtr<ID3D12RootSignature> missSignature;
 
 
