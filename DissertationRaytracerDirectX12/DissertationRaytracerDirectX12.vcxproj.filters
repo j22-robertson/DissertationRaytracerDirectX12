@@ -63,4 +63,11 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="PixelShader.hlsl" />
+    <FxCompile Include="VertexShader.hlsl" />
+    <FxCompile Include="Hit.hlsl" />
+    <FxCompile Include="Miss.hlsl" />
+    <FxCompile Include="RayGen.hlsl" />
+  </ItemGroup>
 </Project>

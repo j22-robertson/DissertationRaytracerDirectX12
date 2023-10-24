@@ -3,10 +3,6 @@
 #include "BottomLevelASGenerator.h"
 #include "RaytracingPipelineGenerator.h"
 #include "RootSignatureGenerator.h"
-#include "DXRHelper.h"
-
-
-
 
 
 struct Vertex {
@@ -37,7 +33,6 @@ bool InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, b
 
 	//Window structure setup
 	WNDCLASSEX wc;
-
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 	wc.lpfnWndProc = WndProc;
@@ -375,7 +370,7 @@ bool InitD3D()
 		nullptr,
 		nullptr,
 		"main",
-		"vs_5_0",
+		"vs_6_1",
 		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
 		0,
 		&vertexShader,
@@ -399,7 +394,7 @@ bool InitD3D()
 		nullptr,
 		nullptr,
 		"main",
-		"ps_5_0",
+		"ps_6_1",
 		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
 		0,
 		&pixelShader,
@@ -490,7 +485,7 @@ bool InitD3D()
 	//CREATE UPLOAD HEAP
 	// USED TO UPLOAD DATA TO GPU, CPU WRITES GPU READS
 
-	ID3D12Resource* vBufferUploadHeap;
+	ID3D12Resource* vBufferUploadHeap = {};
 	//FIX LVALUE
 	auto vbuffer_heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
@@ -545,6 +540,7 @@ bool InitD3D()
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
 
+	CreateShaderBindingTale();
 	commandList->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { commandList };
@@ -630,8 +626,53 @@ void UpdatePipeline() {
 	}
 	else {
 		const float clearColor[] = { 0.6f,0.8f,0.4f,0.1f };
+		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
+		CD3DX12_RESOURCE_BARRIER transition = CD3DX12_RESOURCE_BARRIER::Transition(
+			outputResource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+		commandList->ResourceBarrier(1, &transition);
 
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+		D3D12_DISPATCH_RAYS_DESC desc = {};
+
+		uint32_t rayGenerationSectionSizeInBytes = sbtHelper.GetRayGenSectionSize();
+
+		desc.RayGenerationShaderRecord.StartAddress = sbtHelper.GetRayGenSectionSize();
+
+		desc.RayGenerationShaderRecord.SizeInBytes = rayGenerationSectionSizeInBytes;
+
+		uint32_t missSectionSizeInBytes = sbtHelper.GetMissSectionSize();
+
+		desc.MissShaderTable.StartAddress = sbtStorage->GetGPUVirtualAddress() + rayGenerationSectionSizeInBytes;
+
+		desc.MissShaderTable.SizeInBytes = missSectionSizeInBytes;
+		desc.MissShaderTable.StrideInBytes = sbtHelper.GetHitGroupEntrySize();
+
+		desc.Width = Width;
+
+		desc.Height = Height;
+
+		desc.Depth = 1;
+
+		commandList->SetPipelineState1(rtStateObject.Get());
+
+		commandList->DispatchRays(&desc);
+
+		transition = CD3DX12_RESOURCE_BARRIER::Transition(
+			outputResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+		transition = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST);
+
+
+		commandList->ResourceBarrier(1, &transition);
+		commandList->CopyResource(renderTargets[frameIndex], outputResource.Get());
+
+		transition = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+
+		commandList->ResourceBarrier(1, &transition);
+
 	}
 
 
@@ -1030,6 +1071,36 @@ void CreateShaderResourceheap()
 
 	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
 
+
+}
+void CreateShaderBindingTale()
+{
+	sbtHelper.Reset();
+
+	D3D12_GPU_DESCRIPTOR_HANDLE srvUAVHeapHandle =
+		srvUAVHeap->GetGPUDescriptorHandleForHeapStart();
+
+	auto heapPointer = reinterpret_cast<UINT64*>(srvUAVHeapHandle.ptr);
+
+	sbtHelper.AddRayGenerationProgram(L"RayGen", { heapPointer });
+
+	// Miss and hit shaders do not access external resources, they communicate results through the ray payload instead.
+	sbtHelper.AddMissProgram(L"Miss", {});
+
+	// add triangle shader
+	sbtHelper.AddHitGroup(L"HitGroup", {});
+
+
+	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
+
+	sbtStorage = nv_helpers_dx12::CreateBuffer(device, sbtSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+	if(!sbtStorage)
+	{
+		throw std::logic_error("Could not allocate the shader binding table");
+	}
+
+	sbtHelper.Generate(sbtStorage.Get(), rtStateObjectProps.Get());
 
 }
 void OnKeyUp(UINT8 key)

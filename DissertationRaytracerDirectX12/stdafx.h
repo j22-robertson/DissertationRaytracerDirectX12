@@ -2,6 +2,7 @@
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers.
+#include "ShaderBindingTableGenerator.h"
 #endif
 
 #include <windows.h>
@@ -157,6 +158,10 @@ void CreateRaytracingOutputBuffer();
 
 void CreateShaderResourceheap();
 
+void CreateShaderBindingTale();
+
+nv_helpers_dx12::ShaderBindingTableGenerator sbtHelper;
+ComPtr<ID3D12Resource> sbtStorage;
 ComPtr<ID3D12Resource> outputResource;
 ComPtr<ID3D12DescriptorHeap> srvUAVHeap;
 
