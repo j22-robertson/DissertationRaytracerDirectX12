@@ -370,7 +370,7 @@ bool InitD3D()
 		nullptr,
 		nullptr,
 		"main",
-		"vs_6_1",
+		"vs_5_0",
 		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
 		0,
 		&vertexShader,
@@ -394,7 +394,7 @@ bool InitD3D()
 		nullptr,
 		nullptr,
 		"main",
-		"ps_6_1",
+		"ps_5_0",
 		D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
 		0,
 		&pixelShader,
@@ -925,7 +925,7 @@ ComPtr<ID3D12RootSignature> CreateRayGenSignature()
 				1, /*descriptor*/
 				0, /*Register space 0*/
 				D3D12_DESCRIPTOR_RANGE_TYPE_UAV, /*UAV representing the output buffer*/
-				0 /*t0 */
+				0 /*where UAV is defined */
 			},
 		{
 			0,/*t0*/
@@ -941,6 +941,9 @@ ComPtr<ID3D12RootSignature> CreateRayGenSignature()
 ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
+
+	//rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
+
 
 	return rsc.Generate(device, true);
 }
@@ -964,9 +967,9 @@ void CreateRaytracingPipeline()
 
 
 
-	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen.hlsl" });
-	pipeline.AddLibrary(missLibrary.Get(), { L"Miss.hlsl" });
-	pipeline.AddLibrary(hitLibrary.Get(), { L"Hit.hlsl" });
+	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen.hlsl"});
+	pipeline.AddLibrary(missLibrary.Get(), { L"Miss.hlsl"});
+	pipeline.AddLibrary(hitLibrary.Get(), { L"Hit.hlsl"});
 
 
 	rayGenSignature = CreateRayGenSignature();
@@ -985,16 +988,16 @@ void CreateRaytracingPipeline()
 	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
 	/// </summary>
 
-	pipeline.AddHitGroup(L"HitGroup", { L"ClosestHit" });
+	pipeline.AddHitGroup(L"HitGroup", {L"ClosestHit"});
 
 	
 	// Associate rootsignature with corresponding shader
 
 	//
 	//
-	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), { L"RayGen" });
-	pipeline.AddRootSignatureAssociation(missSignature.Get(), { L"Miss" });
-	pipeline.AddRootSignatureAssociation(hitSignature.Get(), { L"HitGroup" });
+	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
+	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss"});
+	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup"});
 
 
 	pipeline.SetMaxPayloadSize(4 * sizeof(float)); /// RGB + DISTANCE
