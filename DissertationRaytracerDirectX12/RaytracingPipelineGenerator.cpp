@@ -374,8 +374,7 @@ void RayTracingPipelineGenerator::BuildShaderExportList(std::vector<std::wstring
       throw std::logic_error("Any hit symbol not found in the imported DXIL libraries");
     }
 
-    if (!hitGroup.m_closestHitSymbol.empty() &&
-        exports.find(hitGroup.m_closestHitSymbol) == exports.end())
+    if (!hitGroup.m_closestHitSymbol.empty() && exports.find(hitGroup.m_closestHitSymbol) == exports.end())
     {
       throw std::logic_error("Closest hit symbol not found in the imported DXIL libraries");
     }
@@ -384,7 +383,7 @@ void RayTracingPipelineGenerator::BuildShaderExportList(std::vector<std::wstring
     if (!hitGroup.m_intersectionSymbol.empty() &&
         exports.find(hitGroup.m_intersectionSymbol) == exports.end())
     {
-      throw std::logic_error("Intersection symbol not found in the imported DXIL libraries");
+    	throw std::logic_error("Intersection symbol not found in the imported DXIL libraries");
     }
    
     all_exports.insert(hitGroup.m_hitGroupName);

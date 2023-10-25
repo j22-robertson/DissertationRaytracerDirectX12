@@ -540,7 +540,7 @@ bool InitD3D()
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
 
-	CreateShaderBindingTale();
+	CreateShaderBindingTable();
 	commandList->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { commandList };
@@ -942,7 +942,7 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-	//rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 
 
 	return rsc.Generate(device, true);
@@ -967,13 +967,18 @@ void CreateRaytracingPipeline()
 
 
 
-	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen.hlsl"});
-	pipeline.AddLibrary(missLibrary.Get(), { L"Miss.hlsl"});
-	pipeline.AddLibrary(hitLibrary.Get(), { L"Hit.hlsl"});
+	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen"});
+
+	pipeline.AddLibrary(missLibrary.Get(), { L"Miss"});
+
+	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit"});
 
 
+	//RAYGEN
 	rayGenSignature = CreateRayGenSignature();
+	//MISS
 	missSignature = CreateMissSignature();
+	//HIT
 	hitSignature = CreateHitSignature();
 
 
@@ -987,16 +992,18 @@ void CreateRaytracingPipeline()
 	///
 	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
 	/// </summary>
-
-	pipeline.AddHitGroup(L"HitGroup", {L"ClosestHit"});
-
+	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
 	
 	// Associate rootsignature with corresponding shader
 
 	//
 	//
+
 	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
+
 	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss"});
+
+
 	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup"});
 
 
@@ -1018,6 +1025,8 @@ void CreateRaytracingPipeline()
 	ThrowIfFailed(rtStateObject->QueryInterface(IID_PPV_ARGS(&rtStateObjectProps)),L"Unable to create raytracing pipeline");
 
 }
+
+
 void CreateRaytracingOutputBuffer()
 {
 	D3D12_RESOURCE_DESC resDesc{ };
@@ -1076,14 +1085,14 @@ void CreateShaderResourceheap()
 
 
 }
-void CreateShaderBindingTale()
+void CreateShaderBindingTable()
 {
 	sbtHelper.Reset();
 
 	D3D12_GPU_DESCRIPTOR_HANDLE srvUAVHeapHandle =
 		srvUAVHeap->GetGPUDescriptorHandleForHeapStart();
 
-	auto heapPointer = reinterpret_cast<UINT64*>(srvUAVHeapHandle.ptr);
+	auto heapPointer = reinterpret_cast<UINT64 *>(srvUAVHeapHandle.ptr);
 
 	sbtHelper.AddRayGenerationProgram(L"RayGen", { heapPointer });
 
@@ -1096,7 +1105,8 @@ void CreateShaderBindingTale()
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
 
-	sbtStorage = nv_helpers_dx12::CreateBuffer(device, sbtSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+	sbtStorage = nv_helpers_dx12::CreateBuffer(device, sbtSize, D3D12_RESOURCE_FLAG_NONE,
+	                                           D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
 
 	if(!sbtStorage)
 	{

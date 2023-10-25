@@ -158,7 +158,7 @@ void CreateRaytracingOutputBuffer();
 
 void CreateShaderResourceheap();
 
-void CreateShaderBindingTale();
+void CreateShaderBindingTable();
 
 nv_helpers_dx12::ShaderBindingTableGenerator sbtHelper;
 ComPtr<ID3D12Resource> sbtStorage;
