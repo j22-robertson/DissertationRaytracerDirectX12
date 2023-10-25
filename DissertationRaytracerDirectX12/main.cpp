@@ -601,6 +601,9 @@ void UpdatePipeline() {
 		Running = false;
 	}
 
+		commandList->SetGraphicsRootSignature(rootSignature);
+		commandList->RSSetViewports(1, &viewport);
+		commandList->RSSetScissorRects(1, &scissorRect);
 
 	///TODO: fix l-value for rb and rb2
 
@@ -616,9 +619,6 @@ void UpdatePipeline() {
 		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-		commandList->SetGraphicsRootSignature(rootSignature);
-		commandList->RSSetViewports(1, &viewport);
-		commandList->RSSetScissorRects(1, &scissorRect);
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->DrawInstanced(3, 1, 0, 0);
@@ -645,7 +645,7 @@ void UpdatePipeline() {
 
 		desc.MissShaderTable.StartAddress = sbtStorage->GetGPUVirtualAddress() + rayGenerationSectionSizeInBytes;
 		desc.MissShaderTable.SizeInBytes = missSectionSizeInBytes;
-		desc.MissShaderTable.StrideInBytes = sbtHelper.GetHitGroupEntrySize();
+		desc.MissShaderTable.StrideInBytes = sbtHelper.GetMissEntrySize();
 
 		uint32_t hitGroupSectionSize = sbtHelper.GetHitGroupSectionSize();
 		desc.HitGroupTable.StartAddress = sbtStorage->GetGPUVirtualAddress() + rayGenerationSectionSizeInBytes + missSectionSizeInBytes;
