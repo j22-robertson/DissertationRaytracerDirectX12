@@ -625,42 +625,44 @@ void UpdatePipeline() {
 
 	}
 	else {
-		const float clearColor[] = { 0.6f,0.8f,0.4f,0.1f };
 		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
+
+		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
+
 		CD3DX12_RESOURCE_BARRIER transition = CD3DX12_RESOURCE_BARRIER::Transition(
 			outputResource.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		commandList->ResourceBarrier(1, &transition);
-
-		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 		D3D12_DISPATCH_RAYS_DESC desc = {};
 
 		uint32_t rayGenerationSectionSizeInBytes = sbtHelper.GetRayGenSectionSize();
 
 		desc.RayGenerationShaderRecord.StartAddress = sbtHelper.GetRayGenSectionSize();
-
 		desc.RayGenerationShaderRecord.SizeInBytes = rayGenerationSectionSizeInBytes;
 
 		uint32_t missSectionSizeInBytes = sbtHelper.GetMissSectionSize();
 
 		desc.MissShaderTable.StartAddress = sbtStorage->GetGPUVirtualAddress() + rayGenerationSectionSizeInBytes;
-
 		desc.MissShaderTable.SizeInBytes = missSectionSizeInBytes;
 		desc.MissShaderTable.StrideInBytes = sbtHelper.GetHitGroupEntrySize();
 
+		uint32_t hitGroupSectionSize = sbtHelper.GetHitGroupSectionSize();
+		desc.HitGroupTable.StartAddress = sbtStorage->GetGPUVirtualAddress() + rayGenerationSectionSizeInBytes + missSectionSizeInBytes;
+		desc.HitGroupTable.SizeInBytes = hitGroupSectionSize;
+		desc.HitGroupTable.StrideInBytes = sbtHelper.GetHitGroupEntrySize();
 		desc.Width = Width;
-
 		desc.Height = Height;
-
 		desc.Depth = 1;
 
 		commandList->SetPipelineState1(rtStateObject.Get());
-
 		commandList->DispatchRays(&desc);
 
 		transition = CD3DX12_RESOURCE_BARRIER::Transition(
 			outputResource.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+		
+		commandList->ResourceBarrier(1, &transition);
 
 		transition = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_DEST);
 
