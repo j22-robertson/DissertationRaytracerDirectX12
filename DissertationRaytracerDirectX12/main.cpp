@@ -625,8 +625,8 @@ void UpdatePipeline() {
 
 	}
 	else {
-		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	//	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
+	//	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
