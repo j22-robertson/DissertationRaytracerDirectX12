@@ -192,7 +192,7 @@ bool InitD3D()
 			continue;
 		}
 
-		hr = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_11_0, _uuidof(ID3D12Device), nullptr);
+		hr = D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_1, _uuidof(ID3D12Device), nullptr);
 
 		if (SUCCEEDED(hr))
 		{
@@ -625,8 +625,10 @@ void UpdatePipeline() {
 
 	}
 	else {
-		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
+		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
+		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
+		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 
 		CD3DX12_RESOURCE_BARRIER transition = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -638,7 +640,7 @@ void UpdatePipeline() {
 
 		uint32_t rayGenerationSectionSizeInBytes = sbtHelper.GetRayGenSectionSize();
 
-		desc.RayGenerationShaderRecord.StartAddress = sbtHelper.GetRayGenSectionSize();
+		desc.RayGenerationShaderRecord.StartAddress = sbtStorage->GetGPUVirtualAddress();
 		desc.RayGenerationShaderRecord.SizeInBytes = rayGenerationSectionSizeInBytes;
 
 		uint32_t missSectionSizeInBytes = sbtHelper.GetMissSectionSize();
@@ -895,13 +897,13 @@ void CreateAccelerationStructures()
 
 	fenceValue[frameIndex]++;
 
-	commandQueue->Signal(*fence, fenceValue[frameIndex]);
+	commandQueue->Signal(fence[frameIndex], fenceValue[frameIndex]);
 
 	fence[frameIndex]->SetEventOnCompletion(fenceValue[frameIndex], fenceEvent);
 	
 	WaitForSingleObject(fenceEvent, INFINITE);
 
-	hr = commandList->Reset(*commandAllocator, pipelineStateObject);
+	hr = commandList->Reset(commandAllocator[frameIndex], pipelineStateObject);
 
 
 	if (FAILED(hr))
@@ -944,7 +946,7 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
+	//rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 
 
 	return rsc.Generate(device, true);
@@ -1041,16 +1043,11 @@ void CreateRaytracingOutputBuffer()
 
 
 	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-
 	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
 	resDesc.Width = Width;
 	resDesc.Height = Height;
-
 	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-
 	resDesc.MipLevels = 1;
-
 	resDesc.SampleDesc.Count = 1;
 
 	ThrowIfFailed(device->CreateCommittedResource(
