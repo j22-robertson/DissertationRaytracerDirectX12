@@ -116,6 +116,7 @@ std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>
 
 
 
+
 AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers);
 
 
@@ -180,6 +181,11 @@ ComPtr<ID3D12StateObject> rtStateObject;
 
 ComPtr<ID3D12StateObjectProperties> rtStateObjectProps;
 
+
+ComPtr<ID3D12Resource> planeBuffer;
+D3D12_VERTEX_BUFFER_VIEW planeBufferview;
+
+void CreatePlaneVB();
 
 
 void OnKeyUp(UINT8 key);

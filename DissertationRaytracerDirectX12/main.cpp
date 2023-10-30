@@ -525,6 +525,9 @@ bool InitD3D()
 
 	commandList->ResourceBarrier(1, &rbtemp);
 
+
+	CreatePlaneVB();
+
 	CheckRayTracingSupport();
 
 	CreateAccelerationStructures();
@@ -622,6 +625,9 @@ void UpdatePipeline() {
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->DrawInstanced(3, 1, 0, 0);
+
+		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
+		commandList->DrawInstanced(6, 1, 0, 0);
 
 	}
 	else {
@@ -884,8 +890,12 @@ void CreateAccelerationStructures()
 
 	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 3 } });
 
+	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({ {planeBuffer.Get(), 6} });
 
-	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()} };
+	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-.6f, 0, 0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(.6f,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances);
 
@@ -1114,6 +1124,46 @@ void CreateShaderBindingTable()
 	}
 
 	sbtHelper.Generate(sbtStorage.Get(), rtStateObjectProps.Get());
+
+}
+void CreatePlaneVB()
+{
+	
+	Vertex planeVertices[] = {
+	 {-1.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 0
+	 {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
+	 {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
+	 {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
+	 {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
+	 {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}  // 4
+	};
+
+	const auto planeBufferSize= sizeof(planeVertices);
+
+	///Todo: USING UPLOAD HEAPS FOR VBO IS NOT A GOOD IDEA. Why?
+	/// - The upload heap will be marshalled over every time the GPU needs it
+	///The upload heap is used here for temporary code simplicity
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// READ UP ON DEFAULT HEAP USAGE
+	/// 
+	CD3DX12_HEAP_PROPERTIES heapProperty = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(planeBufferSize);
+
+	ThrowIfFailed(device->CreateCommittedResource(&heapProperty, D3D12_HEAP_FLAG_NONE, &bufferResource, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&planeBuffer)),L"Unable to create Plane VBO");
+
+	UINT8 *pVertexDatabegin;
+	CD3DX12_RANGE readRange(0, 0);
+
+	ThrowIfFailed(planeBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDatabegin)),L" ");
+
+	memcpy(pVertexDatabegin, planeVertices, sizeof(planeVertices));
+
+	planeBuffer->Unmap(0, nullptr);
+
+	planeBufferview.BufferLocation = planeBuffer->GetGPUVirtualAddress();
+	planeBufferview.SizeInBytes = sizeof(Vertex);
+	planeBufferview.StrideInBytes = planeBufferSize;
 
 }
 void OnKeyUp(UINT8 key)

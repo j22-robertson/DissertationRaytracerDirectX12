@@ -22,6 +22,18 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
 	
 	float3 hitColor = BTriVertex[vertId+0].color* barycentrics.x + BTriVertex[vertId +1].color * barycentrics.y + BTriVertex[vertId+2].color * barycentrics.z;
+	
+    switch (InstanceID())
+    {
+		case 0:
+            break;
+		case 1:
+            hitColor = B * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
+            break;
+		case 2:
+            hitColor = C * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
+            break; 
+    }
 
 
   payload.colorAndDistance = float4(hitColor, RayTCurrent());
