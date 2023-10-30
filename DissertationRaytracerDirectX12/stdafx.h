@@ -161,6 +161,17 @@ void CreateShaderResourceheap();
 
 void CreateShaderBindingTable();
 
+
+void CreateCameraBuffer();
+
+void UpdateCameraBuffer();
+
+ComPtr<ID3D12Resource> cameraBuffer;
+ComPtr<ID3D12DescriptorHeap> constHeap;
+uint32_t cameraBufferSize = 0;
+
+
+
 nv_helpers_dx12::ShaderBindingTableGenerator sbtHelper;
 ComPtr<ID3D12Resource> sbtStorage;
 ComPtr<ID3D12Resource> outputResource;

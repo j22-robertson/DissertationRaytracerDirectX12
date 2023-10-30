@@ -1126,6 +1126,74 @@ void CreateShaderBindingTable()
 	sbtHelper.Generate(sbtStorage.Get(), rtStateObjectProps.Get());
 
 }
+void CreateCameraBuffer()
+{
+	uint32_t nbMatrix = 4; // View, Perspective, View inv, Perspective inv
+
+	cameraBufferSize = nbMatrix * sizeof(DirectX::XMMATRIX);
+	cameraBuffer = nv_helpers_dx12::CreateBuffer(device, cameraBufferSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
+		device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
+	);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+
+	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = cameraBufferSize;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = constHeap->GetCPUDescriptorHandleForHeapStart();
+
+	device->CreateConstantBufferView(&cbvDesc, srvHandle);
+
+
+
+
+}
+void UpdateCameraBuffer()
+{
+	std::vector<DirectX::XMMATRIX> matrices(4);
+
+	// init view matrix
+
+	DirectX::XMVECTOR cameraEye = DirectX::XMVectorSet(1.5f, 1.5f, 1.5f, 0.0f);
+
+	DirectX::XMVECTOR At = DirectX::XMVectorSet(0.0f,0.0f,0.0f,0.0f);
+
+	DirectX::XMVECTOR Up = DirectX::XMVectorSet(0.0, 1.0f, 0.0f, 0.0f);
+
+	matrices[0] = DirectX::XMMatrixLookAtRH(cameraEye, At, Up);
+
+	float fovAngleY = 45.0f * DirectX::XM_PI / 180.0f;
+
+	float aspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
+
+	matrices[1] = DirectX::XMMatrixPerspectiveFovRH(fovAngleY,aspectRatio, 0.1f, 1000.0f);
+
+
+	// RAYS ARE DEFINED IN CAMERA SPACE AND TRANSFORMED TO WORLD SPACE
+	// WE NEED TO STORE INVERSE MATRICES
+
+	DirectX::XMVECTOR det;
+
+	matrices[2] = DirectX::XMMatrixInverse(&det, matrices[0]);
+	matrices[3] = DirectX::XMMatrixInverse(&det, matrices[1]);
+
+	std::uint8_t* pdata;
+
+	ThrowIfFailed(cameraBuffer->Map(0, nullptr, (void**)&pdata), L"Failed to map camera buffer");
+
+	memcpy(pdata, matrices.data(), cameraBufferSize);
+
+	cameraBuffer->Unmap(0, nullptr);
+
+
+
+
+
+
+
+}
 void CreatePlaneVB()
 {
 	
