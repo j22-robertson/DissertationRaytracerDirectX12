@@ -103,8 +103,9 @@ void mainloop()
 			DispatchMessage(&msg);
 		}
 		else {
-
+			UpdateCameraBuffer();
 			Render();
+			
 			//Update loop goes here
 		}
 	}
@@ -341,9 +342,17 @@ bool InitD3D()
 	}
 
 
-	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
 
-	rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	CD3DX12_ROOT_PARAMETER constantParameter;
+	CD3DX12_DESCRIPTOR_RANGE range;
+
+	range.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
+
+	constantParameter.InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_ALL);
+
+
+	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+	rootSignatureDesc.Init(1, &constantParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
 
@@ -540,6 +549,8 @@ bool InitD3D()
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
+	CreateCameraBuffer();
+
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
 
@@ -619,6 +630,14 @@ void UpdatePipeline() {
 
 	if (m_raster)
 	{
+		std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
+		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
+
+		commandList->SetGraphicsRootDescriptorTable(
+			0, constHeap->GetGPUDescriptorHandleForHeapStart());
+
+
+
 		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
@@ -946,7 +965,7 @@ ComPtr<ID3D12RootSignature> CreateRayGenSignature()
 			1,
 			0,
 			D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*TLAS*/
-			1
+			2
 		} });
 
 	return rsc.Generate(device, true);
@@ -1069,7 +1088,7 @@ void CreateRaytracingOutputBuffer()
 }
 void CreateShaderResourceheap()
 {
-	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 3, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -1092,6 +1111,16 @@ void CreateShaderResourceheap()
 	srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
 
 	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+
+	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = cameraBufferSize;
+	device->CreateConstantBufferView(&cbvDesc, srvHandle);
+
+	
 
 
 }

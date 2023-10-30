@@ -1,3 +1,13 @@
+cbuffer CameraParams : register(b0)
+{
+    float4x4 view;
+    float4x4 projection;
+}
+
+
+
+
+
 struct VS_INPUT
 {
     float3 pos : POSITION;
@@ -12,8 +22,13 @@ struct VS_OUTPUT
 
 VS_OUTPUT main(VS_INPUT input)
 {
+    
+    float3 pos = input.pos;
+    pos = mul(view, pos);
+    pos = mul(projection, pos);
+    
     VS_OUTPUT output;
-    output.pos = float4(input.pos, 1.0f);
+    output.pos = pos;
     output.color = input.color;
     // just pass vertex position straight through
     return output;
