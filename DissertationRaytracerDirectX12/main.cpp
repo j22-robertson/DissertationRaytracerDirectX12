@@ -946,7 +946,7 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-	//rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 
 
 	return rsc.Generate(device, true);
@@ -1100,7 +1100,7 @@ void CreateShaderBindingTable()
 	sbtHelper.AddMissProgram(L"Miss", {});
 
 	// add triangle shader
-	sbtHelper.AddHitGroup(L"HitGroup", {});
+	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress())});
 
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
