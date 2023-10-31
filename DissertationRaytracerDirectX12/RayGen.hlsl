@@ -1,5 +1,13 @@
 #include "Common.hlsl"
 
+cbuffer CameraParam : register(b0)
+{
+    float4x4 view;
+    float4x4 projection;
+    float4x4 viewInverse;
+    float4x4 projectionInverse;
+}
+
 // Raytracing output texture, accessed as a UAV
 RWTexture2D< float4 > gOutput : register(u0);
 
@@ -15,13 +23,17 @@ void RayGen() {
   // Get the location within the dispatched 2D grid of work items
   // (often maps to pixels, so this could represent a pixel coordinate).
   uint2 launchIndex = DispatchRaysIndex().xy;
+ 
+
 
   float2 dims = float2(DispatchRaysDimensions().xy);
   float2 d = (((launchIndex.xy + 0.5f) / dims.xy) * 2.f - 1.f);
-
+  float aspectRatio = dims.x / dims.y;
   RayDesc ray;
-  ray.Origin = float3(d.x, -d.y, 1.0);
-  ray.Direction = float3(0.0, 0.0, -1.0);
+	
+    ray.Origin = mul(viewInverse,float4(0, 0, 0, 1));
+    float4 target = mul(projectionInverse, float4(d.x, -d.y, 1, 1));
+    ray.Direction = mul(viewInverse, float4(target.xyz, 0));
   ray.TMin = 0;
   ray.TMax = 100000;
 

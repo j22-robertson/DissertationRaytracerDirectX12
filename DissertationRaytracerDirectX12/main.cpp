@@ -965,8 +965,16 @@ ComPtr<ID3D12RootSignature> CreateRayGenSignature()
 			1,
 			0,
 			D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*TLAS*/
-			2
-		} });
+			1,
+		},
+		{
+		0,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+		2,
+		}
+		});
 
 	return rsc.Generate(device, true);
 }
@@ -1215,13 +1223,6 @@ void UpdateCameraBuffer()
 	memcpy(pdata, matrices.data(), cameraBufferSize);
 
 	cameraBuffer->Unmap(0, nullptr);
-
-
-
-
-
-
-
 }
 void CreatePlaneVB()
 {

@@ -23,7 +23,7 @@ struct VS_OUTPUT
 VS_OUTPUT main(VS_INPUT input)
 {
     
-    float3 pos = input.pos;
+    float4 pos = { input.pos.xyz, 0 };
     pos = mul(view, pos);
     pos = mul(projection, pos);
     
