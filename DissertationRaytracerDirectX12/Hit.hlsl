@@ -7,6 +7,7 @@ struct STriVertex
 };
 
 StructuredBuffer<STriVertex> BTriVertex : register(t0);
+StructuredBuffer<int> indices : register(t1);
 
 
 [shader("closesthit")] 
@@ -21,7 +22,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	const float3 C = float3(0, 0, 1);
 
 	
-	float3 hitColor = BTriVertex[vertId+0].color* barycentrics.x + BTriVertex[vertId +1].color * barycentrics.y + BTriVertex[vertId+2].color * barycentrics.z;
+    float3 hitColor = BTriVertex[indices[vertId + 0]].color * barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
 	
     switch (InstanceID())
     {

@@ -117,7 +117,7 @@ std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>
 
 
 
-AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers);
+AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers, std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vIndexBuffers);
 
 
 void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances);
@@ -194,6 +194,11 @@ ComPtr<ID3D12StateObjectProperties> rtStateObjectProps;
 
 
 ComPtr<ID3D12Resource> planeBuffer;
+
+ComPtr<ID3D12Resource> indexBuffer;
+
+D3D12_INDEX_BUFFER_VIEW indexBufferView;
+
 D3D12_VERTEX_BUFFER_VIEW planeBufferview;
 
 void CreatePlaneVB();

@@ -470,8 +470,25 @@ bool InitD3D()
 	{ -0.5f, -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f },
 	};
 
+	//Square/Rect
 
-	int vBufferSize = sizeof(vList);
+	Vertex vListRect[] = {
+		{-0.5, 0.5, 0.5, 1.0,0.0,0.0,1.0},
+		{0.5,-0.5,0.5,0.0,1.0,0.0,1.0},
+		{-0.5,-0.5,0.5,0.0,0.0,1.0,1.0},
+		{0.5,0.5,0.5,1.0,0.0,1.0,1.0}
+	};
+
+
+	std::vector<UINT> indices={0,1,2,0,3,1};
+
+
+	int vBufferRectSize = sizeof(vListRect);
+	
+	const UINT iBufferSize = static_cast<UINT>(indices.size()) * sizeof(UINT);
+
+
+	int vBufferSize = sizeof(vListRect);
 
 	//FIX LVLALUE
 	auto heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
@@ -513,7 +530,7 @@ bool InitD3D()
 
 	D3D12_SUBRESOURCE_DATA vertexData = {};
 
-	vertexData.pData = reinterpret_cast<BYTE*>(vList);
+	vertexData.pData = reinterpret_cast<BYTE*>(vListRect);
 	vertexData.RowPitch = vBufferSize;
 	vertexData.SlicePitch = vBufferSize;
 
@@ -531,6 +548,36 @@ bool InitD3D()
 
 	//FIX LVALUE
 	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(vertexBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	
+
+	CD3DX12_HEAP_PROPERTIES iBufferHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		&iBufferHeapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&bufferResource,
+		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+		IID_PPV_ARGS(&indexBuffer)
+	),L"Unable to create Index Buffer for Rect");
+
+	UINT8* pIndexDataBegin;
+	D3D12_RANGE readRange = { 0,0 };
+
+	ThrowIfFailed(indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin)),L"Unable to map index buffer");
+	memcpy(pIndexDataBegin, indices.data(), iBufferSize);
+	indexBuffer->Unmap(0, nullptr);
+
+	indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
+	indexBufferView.Format = DXGI_FORMAT_R32_UINT,
+	indexBufferView.SizeInBytes = iBufferSize;
+	
+
+
+
+
+
 
 	commandList->ResourceBarrier(1, &rbtemp);
 
@@ -643,7 +690,8 @@ void UpdatePipeline() {
 
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
-		commandList->DrawInstanced(3, 1, 0, 0);
+		commandList->IASetIndexBuffer(&indexBufferView);
+		commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
@@ -824,7 +872,7 @@ void CheckRayTracingSupport()
 }
 
 
-AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers)
+AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers,std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>,uint32_t>> vIndexBuffers)
 {
 
 	nv_helpers_dx12::BottomLevelASGenerator bottomLevelAS;
@@ -832,9 +880,20 @@ AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microso
 	// add all vertex buffers
 
 
+	for (size_t i = 0; i < vVertexBuffers.size(); i++)
+	{
+		if (i < vIndexBuffers.size() && vIndexBuffers[i].second > 0)
+		{
+			bottomLevelAS.AddVertexBuffer(vVertexBuffers[i].first.Get(), 0, vVertexBuffers[i].second, sizeof(Vertex), vIndexBuffers[i].first.Get(), 0, vIndexBuffers[i].second, nullptr, 0, true);
+		}
+		else {
+			bottomLevelAS.AddVertexBuffer(vVertexBuffers[i].first.Get(), 0, vVertexBuffers[i].second, sizeof(Vertex), 0, 0);
+
+		}
+	}
+
 	for (const auto& buffer : vVertexBuffers)
 	{
-		bottomLevelAS.AddVertexBuffer(buffer.first.Get(), 0, buffer.second, sizeof(Vertex), 0, 0);
 	}
 
 	//Creating BLAS requires "scratch space" for temporary info, size of scratch memory depends on scene complexity
@@ -907,13 +966,11 @@ void CreateAccelerationStructures()
 {
 	HRESULT hr;
 
-	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 3 } });
+	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 4 } },{{indexBuffer, 6}});
 
-	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}});
+	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-.6f, 0, 0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(.6f,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances);
@@ -984,6 +1041,7 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1);
 
 
 	return rsc.Generate(device, true);
@@ -1149,7 +1207,7 @@ void CreateShaderBindingTable()
 	sbtHelper.AddMissProgram(L"Miss", {});
 
 	// add triangle shader
-	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress())});
+	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress())});
 	sbtHelper.AddHitGroup(L"PlaneHitGroup", {});
 
 
