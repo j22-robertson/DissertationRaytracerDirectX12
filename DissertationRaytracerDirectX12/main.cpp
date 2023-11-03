@@ -909,12 +909,12 @@ void CreateAccelerationStructures()
 
 	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 3 } });
 
-	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({ {planeBuffer.Get(), 6} });
+	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-.6f, 0, 0)},
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(.6f,0,0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
+		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances);
 
@@ -1012,7 +1012,7 @@ void CreateRaytracingPipeline()
 
 	pipeline.AddLibrary(missLibrary.Get(), { L"Miss"});
 
-	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit"});
+	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit",L"PlaneClosestHit"});
 
 
 	//RAYGEN
@@ -1034,18 +1034,20 @@ void CreateRaytracingPipeline()
 	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
 	/// </summary>
 	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
+	pipeline.AddHitGroup(L"PlaneHitGroup", L"PlaneClosestHit");
 	
 	// Associate rootsignature with corresponding shader
 
 	//
 	//
 
+
 	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
 
 	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss"});
 
 
-	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup"});
+	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup",L"PlaneHitGroup"});
 
 
 	pipeline.SetMaxPayloadSize(4 * sizeof(float)); /// RGB + DISTANCE
@@ -1148,6 +1150,7 @@ void CreateShaderBindingTable()
 
 	// add triangle shader
 	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress())});
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", {});
 
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
@@ -1236,7 +1239,7 @@ void CreatePlaneVB()
 	 {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}  // 4
 	};
 
-	const auto planeBufferSize= sizeof(planeVertices);
+	const UINT planeBufferSize= sizeof(planeVertices);
 
 	///Todo: USING UPLOAD HEAPS FOR VBO IS NOT A GOOD IDEA. Why?
 	/// - The upload heap will be marshalled over every time the GPU needs it
@@ -1253,7 +1256,7 @@ void CreatePlaneVB()
 	UINT8 *pVertexDatabegin;
 	CD3DX12_RANGE readRange(0, 0);
 
-	ThrowIfFailed(planeBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDatabegin)),L" ");
+	ThrowIfFailed(planeBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDatabegin)),L"Unable to create plane vertex buffer");
 
 	memcpy(pVertexDatabegin, planeVertices, sizeof(planeVertices));
 
