@@ -16,6 +16,7 @@
 #include <vector>
 #include "TopLevelASGenerator.h"
 #include <wrl/client.h>
+#include "CameraController.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -177,6 +178,7 @@ ComPtr<ID3D12Resource> sbtStorage;
 ComPtr<ID3D12Resource> outputResource;
 ComPtr<ID3D12DescriptorHeap> srvUAVHeap;
 
+CameraController cameraController;
 
 ComPtr<IDxcBlob> rayGenLibrary;
 ComPtr<IDxcBlob> hitLibrary;

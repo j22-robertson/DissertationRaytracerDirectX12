@@ -142,6 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BottomLevelASGenerator.h" />
+    <ClInclude Include="CameraController.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DXRHelper.h" />
     <ClInclude Include="RaytracingPipelineGenerator.h" />
@@ -152,6 +153,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BottomLevelASGenerator.cpp" />
+    <ClCompile Include="CameraController.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RaytracingPipelineGenerator.cpp" />
     <ClCompile Include="RootSignatureGenerator.cpp" />

@@ -1187,10 +1187,6 @@ void CreateShaderResourceheap()
 	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
 	cbvDesc.SizeInBytes = cameraBufferSize;
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
-
-	
-
-
 }
 void CreateShaderBindingTable()
 {
@@ -1250,7 +1246,7 @@ void CreateCameraBuffer()
 }
 void UpdateCameraBuffer()
 {
-	std::vector<DirectX::XMMATRIX> matrices(4);
+	/*std::vector<DirectX::XMMATRIX> matrices(4);
 
 	// init view matrix
 
@@ -1275,7 +1271,10 @@ void UpdateCameraBuffer()
 	DirectX::XMVECTOR det;
 
 	matrices[2] = DirectX::XMMatrixInverse(&det, matrices[0]);
-	matrices[3] = DirectX::XMMatrixInverse(&det, matrices[1]);
+	matrices[3] = DirectX::XMMatrixInverse(&det, matrices[1]);*/
+	//cameraController.UpdateCamera(Width, Height);
+
+	auto matrices = cameraController.UpdateCamera(Width, Height);
 
 	std::uint8_t* pdata;
 
