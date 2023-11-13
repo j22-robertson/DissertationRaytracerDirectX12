@@ -1276,7 +1276,7 @@ void UpdateCameraBuffer()
 	matrices[3] = DirectX::XMMatrixInverse(&det, matrices[1]);*/
 	//cameraController.UpdateCamera(Width, Height);
 
-	auto matrices = cameraController.UpdateCamera(Width, Height);
+	auto matrices = cameraController.GetCameraData(Width, Height);
 
 	std::uint8_t* pdata;
 
@@ -1331,5 +1331,9 @@ void OnKeyUp(UINT8 key)
 	if (key == VK_UP)
 	{
 		m_raster = !m_raster;
+	}
+	if (key == VK_DOWN)
+	{
+		cameraController.MoveForward();
 	}
 }
