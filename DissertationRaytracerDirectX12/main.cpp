@@ -4,7 +4,23 @@
 #include "RaytracingPipelineGenerator.h"
 #include "RootSignatureGenerator.h"
 
+//TODO: MOVE OUT OF MAIN
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
+
 //#include "imgui.h"
+
+std::string inputfile = "teapot.obj.txt";
+tinyobj::ObjReaderConfig reader_config;
+tinyobj::ObjReader reader;
+
+
+UINT teapotVertNumber;
+UINT teapotIndexNumber;
+
+// See vertices for model loading
+
+
 
 
 struct Vertex {
@@ -12,6 +28,9 @@ struct Vertex {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 color;
 };
+
+
+
 
 
 
@@ -463,9 +482,114 @@ bool InitD3D()
 
 
 
+	if (!reader.ParseFromFile(inputfile, reader_config))
+	{
+		if (!reader.Error().empty())
+		{
+			std::printf( "unable to read file");
+
+		}
+	}
+	//Teapot only has ONE shape/mesh, expand with multiple meshes
+
+	auto& attribs = reader.GetAttrib();
+	auto& shapes = reader.GetShapes();
+
+	auto importIndices = shapes[0].mesh.indices;
+
+
+	std::vector<UINT> teapotIndices;
+	for (auto index : importIndices)
+	{
+		teapotIndices.push_back(static_cast<UINT>(index.vertex_index));
+		
+
+
+	}
+
+
+
+	//auto tpIbufferSize = teapotIndices.size();
+
+
+///	attribs.vertices.size();
+
+	teapotIndexNumber = teapotIndices.size();
+
+	std::vector<Vertex> teapotVertices;
+
+	if (!shapes.empty())
+	{
+		std::printf("Successfully imported model");
+	}
+
+	float prescale = 0.25;
+
+	/*
+	for (size_t i = 0; i < shapes[0].mesh.num_face_vertices.size(); i++)
+	{
+		size_t faceNum = size_t(shapes[0].mesh.num_face_vertices[i]);
+
+		
+		for (size_t v = 0; v < faceNum; v++)
+		{
+			Vertex tempvert = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+
+			tempvert.pos.x = (attribs.vertices[v* 3 + 0] * prescale);
+			tempvert.pos.y = (attribs.vertices[v * 3 + 1]* prescale);
+			tempvert.pos.z = (attribs.vertices[v * 3 + 2]* prescale);
+
+			tempvert.color.x = 1.0;
+			tempvert.color.w = 1.0;
+
+
+			teapotVertices.push_back(tempvert);
+			//tinyobj::index_t = shapes[0].mesh.indices[i+v]
+			//attribs.vertices[3*size_t()]
+
+
+
+
+		}
+
+		}*/
+
+	for (size_t i = 0; i < attribs.vertices.size()/3; i++ )
+	{
+
+
+
+		Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0 };	
+
+		tempvert.pos.x = (attribs.vertices[i * 3 + 0] * prescale);
+		tempvert.pos.y = (attribs.vertices[i * 3 + 1] * prescale);
+		tempvert.pos.z = (attribs.vertices[i * 3 + 2] * prescale);
+
+		tempvert.color.x = 1.0;
+		tempvert.color.w = 1.0;
+
+
+		teapotVertices.push_back(tempvert);
+
+	}
+	teapotVertNumber = teapotVertices.size();
+
+	if (!teapotVertices.empty())
+	{
+		printf("Success");
+	}
+
+	int vBufferTeapotSize = teapotVertNumber * sizeof(Vertex);
+
+	const UINT iBufferTeapotSize= static_cast<UINT>(teapotIndexNumber) * sizeof(UINT);
+
+
+
 	//// TEMP TRIANGLE SETUP
 
+	
 	//triangle
+	/*
 	Vertex vList[] = {
 	{ 0.0f, 0.5f, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f },
 	{ 0.5f, -0.5f, 0.5f, 0.0f, 1.0f, 0.0f, 1.0f },
@@ -491,10 +615,10 @@ bool InitD3D()
 
 
 	int vBufferSize = sizeof(vListRect);
-
+*/
 	//FIX LVLALUE
 	auto heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	auto resource_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferSize);
+	auto resource_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferTeapotSize);
 
 
 	device->CreateCommittedResource(
@@ -517,7 +641,7 @@ bool InitD3D()
 	//FIX LVALUE
 	auto vbuffer_heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
-	auto vbuffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferSize);
+	auto vbuffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferTeapotSize);
 
 	device->CreateCommittedResource(
 		&vbuffer_heap_props,
@@ -532,9 +656,9 @@ bool InitD3D()
 
 	D3D12_SUBRESOURCE_DATA vertexData = {};
 
-	vertexData.pData = reinterpret_cast<BYTE*>(vListRect);
-	vertexData.RowPitch = vBufferSize;
-	vertexData.SlicePitch = vBufferSize;
+	vertexData.pData = reinterpret_cast<BYTE*>(teapotVertices.data());
+	vertexData.RowPitch = vBufferTeapotSize;
+	vertexData.SlicePitch = vBufferTeapotSize;
 
 
 
@@ -554,7 +678,7 @@ bool InitD3D()
 	
 
 	CD3DX12_HEAP_PROPERTIES iBufferHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
+	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(iBufferTeapotSize);
 
 	ThrowIfFailed(device->CreateCommittedResource(
 		&iBufferHeapProperties,
@@ -568,12 +692,12 @@ bool InitD3D()
 	D3D12_RANGE readRange = { 0,0 };
 
 	ThrowIfFailed(indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin)),L"Unable to map index buffer");
-	memcpy(pIndexDataBegin, indices.data(), iBufferSize);
+	memcpy(pIndexDataBegin, teapotIndices.data(), iBufferTeapotSize);
 	indexBuffer->Unmap(0, nullptr);
 
 	indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
 	indexBufferView.Format = DXGI_FORMAT_R32_UINT,
-	indexBufferView.SizeInBytes = iBufferSize;
+	indexBufferView.SizeInBytes = iBufferTeapotSize;
 	
 
 
@@ -621,7 +745,7 @@ bool InitD3D()
 
 	vertexBufferView.BufferLocation = vertexBuffer->GetGPUVirtualAddress();
 	vertexBufferView.StrideInBytes = sizeof(Vertex);
-	vertexBufferView.SizeInBytes = vBufferSize;
+	vertexBufferView.SizeInBytes = vBufferTeapotSize;
 
 	// Fill out the Viewport
 	viewport.TopLeftX = 0;
@@ -693,7 +817,7 @@ void UpdatePipeline() {
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
-		commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+		commandList->DrawIndexedInstanced(18960, 1, 0, 0, 0);
 
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
@@ -968,7 +1092,7 @@ void CreateAccelerationStructures()
 {
 	HRESULT hr;
 
-	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, 4 } },{{indexBuffer, 6}});
+	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, teapotVertNumber } },{{indexBuffer, teapotIndexNumber}});
 
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 

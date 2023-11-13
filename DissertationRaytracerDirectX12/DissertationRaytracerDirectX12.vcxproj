@@ -149,6 +149,7 @@
     <ClInclude Include="RootSignatureGenerator.h" />
     <ClInclude Include="ShaderBindingTableGenerator.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="tiny_obj_loader.h" />
     <ClInclude Include="TopLevelASGenerator.h" />
   </ItemGroup>
   <ItemGroup>
