@@ -176,6 +176,9 @@ ComPtr<ID3D12DescriptorHeap> constHeap;
 
 ComPtr<ID3D12Resource> globalConstBuffer;
 
+std::vector<ComPtr<ID3D12Resource>> perInstanceConstantBuffers;
+
+
 uint32_t cameraBufferSize = 0;
 
 

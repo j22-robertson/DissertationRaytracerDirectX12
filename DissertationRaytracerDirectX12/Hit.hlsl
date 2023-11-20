@@ -1,13 +1,29 @@
 #include "Common.hlsl"
-#include "ShadowHit.hlsl"
+
+struct ShadowHitInfo
+{
+    bool ishit;
+};
+
 struct STriVertex
 {
     float3 vertex;
     float4 color;
 };
+cbuffer Colors : register(b0)
+{
+    float3 A[3];
+    float3 B[3];
+    float3 C[3];
+};
+
+
+
+RaytracingAccelerationStructure SceneBVH : register(t2);
 
 StructuredBuffer<STriVertex> BTriVertex : register(t0);
 StructuredBuffer<int> indices : register(t1);
+
 
 
 [shader("closesthit")] 
@@ -17,13 +33,21 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     uint vertId = 3 * PrimitiveIndex();
 	
-	const float3 A = float3(1, 0, 0);
-	const float3 B = float3(0, 1, 0);
-	const float3 C = float3(0, 0, 1);
+	//const float3 A = float3(1, 0, 0);
+	//const float3 B = float3(0, 1, 0);
+	//const float3 C = float3(0, 0, 1);
 
 	
-    float3 hitColor = BTriVertex[indices[vertId + 0]].color * barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
+   // float3 hitColor = BTriVertex[indices[vertId + 0]].color * barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
+    
+    
+    float3 hitColor;
 	
+   if (InstanceID() < 3)
+   {
+        hitColor = A[InstanceID()] * barycentrics.x + B[InstanceID()] * barycentrics.y * C[InstanceID()] + barycentrics.z;
+   }
+    /*
     switch (InstanceID())
     {
 		case 0:
@@ -34,7 +58,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 		case 2:
             hitColor = C * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
             break; 
-    }
+    }*/
 
 
   payload.colorAndDistance = float4(hitColor, RayTCurrent());
@@ -45,7 +69,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
 {
     // Hard coded light position
-    float3 lightPos = float3(2, 2, 2);
+    float3 lightPos = float3(2, 4, -2);
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
@@ -71,6 +95,7 @@ void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
     1,
     0,
     1,
+    ray,
     shadowPayload);
     
     float factor = shadowPayload.ishit ? 0.3 : 1.0;
@@ -84,5 +109,5 @@ void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
     
     float4 hitColor = float4(float3(0.7, 0.7, 0.3) * factor, RayTCurrent());
 
-    payload.colorAndDistance = floa4(hitColor);
+    payload.colorAndDistance = float4(hitColor);
 }

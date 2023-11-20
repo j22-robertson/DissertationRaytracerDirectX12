@@ -1,7 +1,4 @@
 
-
-RaytracingAccelerationStructure SceneBVH : register(t2);
-
 struct ShadowHitInfo
 {
     bool ishit;
@@ -11,6 +8,10 @@ struct Attributes
 {
     float2 uv;
 };
+
+
+
+
 
 [shader("closesthit")]
 void ShadowClosestHit(inout ShadowHitInfo hit, Attributes barycentric)

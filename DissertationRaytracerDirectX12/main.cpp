@@ -523,7 +523,7 @@ bool InitD3D()
 		std::printf("Successfully imported model");
 	}
 
-	float prescale = 0.25;
+	float prescale = 0.1;
 
 	/*
 	for (size_t i = 0; i < shapes[0].mesh.num_face_vertices.size(); i++)
@@ -716,6 +716,12 @@ bool InitD3D()
 
 
 	CreateRaytracingPipeline();
+
+	CreateGlobalConstantBuffer();
+
+
+
+	CreatePerInstanceBuffer();
 
 
 
@@ -1061,7 +1067,7 @@ void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12R
 			instances[i].first.Get(),
 			instances[i].second,
 			static_cast<UINT>(i),
-			static_cast<UINT>(0)
+			static_cast<UINT>(2*i)
 			);
 	}
 
@@ -1097,6 +1103,8 @@ void CreateAccelerationStructures()
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(1,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances);
@@ -1166,6 +1174,7 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV,0);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1);
 	rsc.AddHeapRangesParameter({{
@@ -1197,7 +1206,7 @@ void CreateRaytracingPipeline()
 	rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"RayGen.hlsl");
 	missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Miss.hlsl");
 	hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Hit.hlsl");
-	shadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"ShaodwHit.hlsl");
+	shadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"ShadowHit.hlsl");
 
 
 
@@ -1208,7 +1217,7 @@ void CreateRaytracingPipeline()
 
 	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit",L"PlaneClosestHit"});
 
-	pipeline.AddLibrary(shadowLibrary.Get(), { L"ShadowHit" });
+	pipeline.AddLibrary(shadowLibrary.Get(),{L"ShadowClosestHit",L"ShadowMiss"});
 
 
 
@@ -1220,7 +1229,7 @@ void CreateRaytracingPipeline()
 	missSignature = CreateMissSignature();
 	//HIT
 	hitSignature = CreateHitSignature();
-
+	//ShadowRays
 	shadowHitSignature = CreateHitSignature();
 
 
@@ -1239,7 +1248,7 @@ void CreateRaytracingPipeline()
 
 
 	//shadows
-	pipeline.AddHitGroup(L"ShadowHitGroup", L"ShadowClosestHit");
+	pipeline.AddHitGroup(L"ShadowHitGroup",L"ShadowClosestHit");
 	// Associate rootsignature with corresponding shader
 
 	//
@@ -1248,12 +1257,13 @@ void CreateRaytracingPipeline()
 
 	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
 
+	pipeline.AddRootSignatureAssociation(shadowHitSignature.Get(), {L"ShadowHitGroup"});
 	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss",L"ShadowMiss"});
 
 
 	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup",L"PlaneHitGroup"});
 
-	pipeline.AddRootSignatureAssociation(shadowHitSignature.Get(), { L"ShadowHitGroup" });
+
 
 
 
@@ -1357,10 +1367,27 @@ void CreateShaderBindingTable()
 	sbtHelper.AddMissProgram(L"ShadowMiss", {});
 
 
-	// add triangle shader
-	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress())});
-	
+
+
+
+
+	for (int i = 0; i < 3; i++)
+	{
+		sbtHelper.AddHitGroup(
+			L"HitGroup",
+			{(void*)perInstanceConstantBuffers[i]->GetGPUVirtualAddress()}
+		);
+		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
+	}
+
+	sbtHelper.AddHitGroup(L"HitGroup", { (void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
+	// add triangle shader
+//	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
+
+
+	
+	
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
 
@@ -1441,16 +1468,77 @@ void UpdateCameraBuffer()
 }
 void CreateGlobalConstantBuffer()
 {
-	XMVECTOR bufferData[] = 
+	DirectX::XMVECTOR bufferData[] =
 	{
+	DirectX::XMVECTOR{1.0f, 0.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.4f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.7f, 0.0f, 1.0f},
+
+	// B
+	DirectX::XMVECTOR{0.0f, 1.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.7f, 0.4f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.4f, 0.7f, 1.0f},
+
+	// C
+	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
 
 
-	}
+	};
 
+	globalConstBuffer = nv_helpers_dx12::CreateBuffer(
+		device,
+		sizeof(bufferData),
+		D3D12_RESOURCE_FLAG_NONE,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nv_helpers_dx12::kUploadHeapProps
+		);
 
+	uint8_t* pData;
+
+	ThrowIfFailed(globalConstBuffer->Map(0, nullptr, (void**)&pData),L"Unable to create global const buffer");
+	memcpy(pData, bufferData, sizeof(bufferData));
+	globalConstBuffer->Unmap(0, nullptr);
 }
 void CreatePerInstanceBuffer()
 {
+	DirectX::XMVECTOR bufferData[] =
+	{
+	DirectX::XMVECTOR{1.0f, 0.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.4f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.7f, 0.0f, 1.0f},
+
+	// B
+	DirectX::XMVECTOR{0.0f, 1.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.7f, 0.4f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.4f, 0.7f, 1.0f},
+
+	// C
+	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
+
+
+	};
+
+	
+	perInstanceConstantBuffers.resize(3);
+
+	int i(0);
+	for (auto& buffer : perInstanceConstantBuffers)
+	{
+		const uint32_t bufferSize = sizeof(DirectX::XMVECTOR) * 3;
+		buffer = nv_helpers_dx12::CreateBuffer(device, bufferSize, D3D12_RESOURCE_FLAG_NONE,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+		uint8_t* pData;
+
+		ThrowIfFailed(buffer->Map(0, nullptr, (void**)&pData), L"Unable to load per instance constant buffer");
+		memcpy(pData, &bufferData[i * 3], bufferSize);
+		buffer->Unmap(0, nullptr);
+		i++;
+	}
 
 }
 void CreatePlaneVB()
