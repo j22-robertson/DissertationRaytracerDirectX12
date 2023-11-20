@@ -1380,7 +1380,7 @@ void CreateShaderBindingTable()
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 
-	sbtHelper.AddHitGroup(L"HitGroup", { (void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	// add triangle shader
 //	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
