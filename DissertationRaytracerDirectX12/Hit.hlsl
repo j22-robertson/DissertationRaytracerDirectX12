@@ -1,5 +1,5 @@
 #include "Common.hlsl"
-
+#include "ShadowHit.hlsl"
 struct STriVertex
 {
     float3 vertex;
@@ -44,9 +44,45 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 [shader("closesthit")]
 void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
 {
+    // Hard coded light position
+    float3 lightPos = float3(2, 2, 2);
+    
+    float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+    
+    float3 lightDir = normalize(lightPos - worldOrigin);
+    
+    
+    RayDesc ray;
+    ray.Origin = worldOrigin;
+    ray.Direction = lightDir;
+    ray.TMin = 0.01;
+    ray.TMax = 100000;
+    bool hit = true;
+    
+    
+    ShadowHitInfo shadowPayload;
+    shadowPayload.ishit= false;
+    
+    
+    TraceRay
+    (SceneBVH,
+    RAY_FLAG_NONE,
+    0xFF,
+    1,
+    0,
+    1,
+    shadowPayload);
+    
+    float factor = shadowPayload.ishit ? 0.3 : 1.0;
+    
+    
+    
+    
+    
+    
     float3 barycentrics = float3(1.f - attrib.bary.x - attrib.bary.y, attrib.bary.x, attrib.bary.y);
     
-    float3 hitColor = float3(0.7, 0.7, 0.3);
+    float4 hitColor = float4(float3(0.7, 0.7, 0.3) * factor, RayTCurrent());
 
-    payload.colorAndDistance = float4(hitColor, RayTCurrent());
+    payload.colorAndDistance = floa4(hitColor);
 }

@@ -167,8 +167,15 @@ void CreateCameraBuffer();
 
 void UpdateCameraBuffer();
 
+void CreateGlobalConstantBuffer();
+
+void CreatePerInstanceBuffer();
+
 ComPtr<ID3D12Resource> cameraBuffer;
 ComPtr<ID3D12DescriptorHeap> constHeap;
+
+ComPtr<ID3D12Resource> globalConstBuffer;
+
 uint32_t cameraBufferSize = 0;
 
 
@@ -183,11 +190,13 @@ CameraController cameraController;
 ComPtr<IDxcBlob> rayGenLibrary;
 ComPtr<IDxcBlob> hitLibrary;
 ComPtr<IDxcBlob> missLibrary;
+ComPtr<IDxcBlob> shadowLibrary;
 
 
 ComPtr<ID3D12RootSignature> rayGenSignature;
 ComPtr<ID3D12RootSignature> hitSignature;
 ComPtr<ID3D12RootSignature> missSignature;
+ComPtr<ID3D12RootSignature> shadowHitSignature;
 
 
 ComPtr<ID3D12StateObject> rtStateObject;

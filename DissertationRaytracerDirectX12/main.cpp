@@ -1168,6 +1168,14 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1);
+	rsc.AddHeapRangesParameter({{
+		2 /*t2*/,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		1/*2nd heap slot*/
+		},
+		});
 
 
 	return rsc.Generate(device, true);
@@ -1189,6 +1197,8 @@ void CreateRaytracingPipeline()
 	rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"RayGen.hlsl");
 	missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Miss.hlsl");
 	hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Hit.hlsl");
+	shadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"ShaodwHit.hlsl");
+
 
 
 
@@ -1198,6 +1208,11 @@ void CreateRaytracingPipeline()
 
 	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit",L"PlaneClosestHit"});
 
+	pipeline.AddLibrary(shadowLibrary.Get(), { L"ShadowHit" });
+
+
+
+
 
 	//RAYGEN
 	rayGenSignature = CreateRayGenSignature();
@@ -1205,6 +1220,8 @@ void CreateRaytracingPipeline()
 	missSignature = CreateMissSignature();
 	//HIT
 	hitSignature = CreateHitSignature();
+
+	shadowHitSignature = CreateHitSignature();
 
 
 	/// <summary>
@@ -1219,7 +1236,10 @@ void CreateRaytracingPipeline()
 	/// </summary>
 	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
 	pipeline.AddHitGroup(L"PlaneHitGroup", L"PlaneClosestHit");
-	
+
+
+	//shadows
+	pipeline.AddHitGroup(L"ShadowHitGroup", L"ShadowClosestHit");
 	// Associate rootsignature with corresponding shader
 
 	//
@@ -1228,10 +1248,17 @@ void CreateRaytracingPipeline()
 
 	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
 
-	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss"});
+	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss",L"ShadowMiss"});
 
 
 	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup",L"PlaneHitGroup"});
+
+	pipeline.AddRootSignatureAssociation(shadowHitSignature.Get(), { L"ShadowHitGroup" });
+
+
+
+
+
 
 
 	pipeline.SetMaxPayloadSize(4 * sizeof(float)); /// RGB + DISTANCE
@@ -1245,7 +1272,7 @@ void CreateRaytracingPipeline()
 
 	//path tracing algorithms can be flattened into a simple loop in ray generation
 
-	pipeline.SetMaxRecursionDepth(1);
+	pipeline.SetMaxRecursionDepth(2);
 
 	rtStateObject = pipeline.Generate();
 
@@ -1327,11 +1354,13 @@ void CreateShaderBindingTable()
 
 	// Miss and hit shaders do not access external resources, they communicate results through the ray payload instead.
 	sbtHelper.AddMissProgram(L"Miss", {});
+	sbtHelper.AddMissProgram(L"ShadowMiss", {});
+
 
 	// add triangle shader
 	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress())});
-	sbtHelper.AddHitGroup(L"PlaneHitGroup", {});
-
+	
+	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
 
@@ -1409,6 +1438,20 @@ void UpdateCameraBuffer()
 	memcpy(pdata, matrices.data(), cameraBufferSize);
 
 	cameraBuffer->Unmap(0, nullptr);
+}
+void CreateGlobalConstantBuffer()
+{
+	XMVECTOR bufferData[] = 
+	{
+
+
+	}
+
+
+}
+void CreatePerInstanceBuffer()
+{
+
 }
 void CreatePlaneVB()
 {
