@@ -225,3 +225,14 @@ bool m_raster = true;
 
 
 std::uint32_t game_time;
+
+ComPtr<ID3D12Resource> perInstancePropertiesBuffer;
+
+void CreatePerInstancePropertiesBuffer();
+
+void UpdatePerInstanceProperties();
+
+struct PerInstanceProperties {
+	DirectX::XMMATRIX objectToWorld;
+	DirectX::XMMATRIX objectToWorldNormal;
+};

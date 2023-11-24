@@ -128,7 +128,7 @@ void mainloop()
 			game_time++;
 			instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
 				}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f* cosf(game_time / 20.0f),0.0f);
-
+			//UpdatePerInstanceProperties();
 			Render();
 			
 			//Update loop goes here
@@ -732,7 +732,10 @@ bool InitD3D()
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
+
+	//CreatePerInstancePropertiesBuffer();
 	CreateCameraBuffer();
+	
 
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
@@ -1190,8 +1193,8 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV,0);
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV);
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV,0/*t0*/);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
 	rsc.AddHeapRangesParameter({{
 		2 /*t2*/,
 		1,
@@ -1199,7 +1202,14 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
 		1/*2nd heap slot*/
 		},
+		
+		//{3/*t3*/,
+	//	1,
+		//0,
+		//D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		//3} /* Per Instance Data*/
 		});
+
 
 
 	return rsc.Generate(device, true);
@@ -1365,6 +1375,21 @@ void CreateShaderResourceheap()
 	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
 	cbvDesc.SizeInBytes = cameraBufferSize;
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+/*
+	D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
+	perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+	perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	perInstanceViewDesc.Buffer.FirstElement = 0;
+	perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+	perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);*/
+
+
 }
 void CreateShaderBindingTable()
 {
@@ -1388,14 +1413,11 @@ void CreateShaderBindingTable()
 
 	for (int i = 0; i < 3; i++)
 	{
-		sbtHelper.AddHitGroup(
-			L"HitGroup",
-			{(void*)perInstanceConstantBuffers[i]->GetGPUVirtualAddress()}
-		);
+		sbtHelper.AddHitGroup(L"HitGroup",{(void*)perInstanceConstantBuffers[i]->GetGPUVirtualAddress()});
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 
-	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,(void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	// add triangle shader
 //	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
@@ -1419,11 +1441,16 @@ void CreateShaderBindingTable()
 }
 void CreateCameraBuffer()
 {
+
+
 	uint32_t nbMatrix = 4; // View, Perspective, View inv, Perspective inv
 
 	cameraBufferSize = nbMatrix * sizeof(DirectX::XMMATRIX);
 	cameraBuffer = nv_helpers_dx12::CreateBuffer(device, cameraBufferSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
 
+
+	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
+	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
 	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
 		device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
 	);
@@ -1437,6 +1464,20 @@ void CreateCameraBuffer()
 
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
+
+	/*/// TODO: Move creation of PerInstanceProperties view out of this function
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+	srvDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);*/
 
 
 
@@ -1533,9 +1574,9 @@ void CreatePerInstanceBuffer()
 	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
 	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
 	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
-
-
 	};
+
+
 
 	
 	perInstanceConstantBuffers.resize(3);
@@ -1606,4 +1647,39 @@ void OnKeyUp(UINT8 key)
 	{
 		cameraController.MoveForward();
 	}
+}
+
+
+
+void CreatePerInstancePropertiesBuffer()
+{
+	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size() * sizeof(PerInstanceProperties)), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+	perInstancePropertiesBuffer = nv_helpers_dx12::CreateBuffer(device, buffersize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+
+}
+
+void UpdatePerInstanceProperties()
+{
+
+	PerInstanceProperties* current = nullptr;
+	CD3DX12_RANGE readRange(0, 0);
+	ThrowIfFailed(perInstancePropertiesBuffer->Map(0, &readRange, reinterpret_cast<void**>(&current)), L"Unable to map instance properties");
+	for (const auto& instance : instances)
+	{
+		current->objectToWorld = instance.second;
+		DirectX::XMMATRIX upper3x3 = instance.second;
+		upper3x3.r[0].m128_f32[3] = 0.f;
+		upper3x3.r[1].m128_f32[3] = 0.f;
+		upper3x3.r[2].m128_f32[3] = 0.f;
+		upper3x3.r[3].m128_f32[0] = 0.f;
+		upper3x3.r[3].m128_f32[1] = 0.f;
+		upper3x3.r[3].m128_f32[2] = 0.f;
+		upper3x3.r[3].m128_f32[3] = 1.f;
+		DirectX::XMVECTOR det;
+		current->objectToWorldNormal = XMMatrixTranspose(XMMatrixInverse(&det, upper3x3));
+		current++;
+	}
+	perInstancePropertiesBuffer->Unmap(0, nullptr);
 }
