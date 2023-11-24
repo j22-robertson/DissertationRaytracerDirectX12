@@ -125,6 +125,10 @@ void mainloop()
 		}
 		else {
 			UpdateCameraBuffer();
+			game_time++;
+			instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+				}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f* cosf(game_time / 20.0f),0.0f);
+
 			Render();
 			
 			//Update loop goes here
@@ -830,6 +834,8 @@ void UpdatePipeline() {
 
 	}
 	else {
+
+		CreateTopLevelAS(instances, true);
 	//	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 	//	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
@@ -1057,37 +1063,46 @@ AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microso
 
 }
 
-void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances ) {
+void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly) {
 
 	// INSTANCES IS PAIR OF BLAS AND MATRIX OF THE INSTANCE
 
-	for (size_t i = 0; i < instances.size(); i++)
+	if (!updateOnly)
 	{
-		topLevelASGenerator.AddInstance(
-			instances[i].first.Get(),
-			instances[i].second,
-			static_cast<UINT>(i),
-			static_cast<UINT>(2*i)
+		for (size_t i = 0; i < instances.size(); i++)
+		{
+
+			topLevelASGenerator.AddInstance(
+				instances[i].first.Get(),
+				instances[i].second,
+				static_cast<UINT>(i),
+				static_cast<UINT>(2 * i)
 			);
+		}
+
+
+		// Just like BLAS requires scratch space in addition to actual AS
+		// Unlike BLAS with TLAS instance descriptors need to be stored in GPU memory
+		// this call outputs memory requirements for each (scratch, results, instance descriptors) so that the correct amount of memory can be allocated
+
+
+		UINT64 scratchSize, resultSize, instanceDescSize;
+
+		topLevelASGenerator.ComputeASBufferSizes(device, true, &scratchSize, &resultSize, &instanceDescSize);
+
+		topLevelASBuffers.pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nv_helpers_dx12::kDefaultHeapProps);
+
+		topLevelASBuffers.pResult = nv_helpers_dx12::CreateBuffer(device, resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
+
+		topLevelASBuffers.pInstanceDesc = nv_helpers_dx12::CreateBuffer(device, instanceDescSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
 	}
 
-
-	// Just like BLAS requires scratch space in addition to actual AS
-	// Unlike BLAS with TLAS instance descriptors need to be stored in GPU memory
-	// this call outputs memory requirements for each (scratch, results, instance descriptors) so that the correct amount of memory can be allocated
-
-
-	UINT64 scratchSize, resultSize, instanceDescSize;
-
-	topLevelASGenerator.ComputeASBufferSizes(device, true, &scratchSize, &resultSize, &instanceDescSize);
-
-	topLevelASBuffers.pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nv_helpers_dx12::kDefaultHeapProps);
-
-	topLevelASBuffers.pResult = nv_helpers_dx12::CreateBuffer(device, resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
-
-	topLevelASBuffers.pInstanceDesc = nv_helpers_dx12::CreateBuffer(device, instanceDescSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
-
-	topLevelASGenerator.Generate(commandList, topLevelASBuffers.pScratch.Get(), topLevelASBuffers.pResult.Get(), topLevelASBuffers.pInstanceDesc.Get());
+	topLevelASGenerator.Generate(commandList,
+		topLevelASBuffers.pScratch.Get(),
+		topLevelASBuffers.pResult.Get(),
+		topLevelASBuffers.pInstanceDesc.Get(),
+		updateOnly,
+		topLevelASBuffers.pResult.Get());
 
 
 
@@ -1107,7 +1122,7 @@ void CreateAccelerationStructures()
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(1,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
-	CreateTopLevelAS(instances);
+	CreateTopLevelAS(instances, false);
 
 	commandList->Close();
 
