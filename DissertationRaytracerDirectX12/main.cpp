@@ -128,7 +128,7 @@ void mainloop()
 			game_time++;
 			instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
 				}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f* cosf(game_time / 20.0f),0.0f);
-			//UpdatePerInstanceProperties();
+			UpdatePerInstanceProperties();
 			Render();
 			
 			//Update loop goes here
@@ -570,6 +570,8 @@ bool InitD3D()
 		tempvert.pos.z = (attribs.vertices[i * 3 + 2] * prescale);
 
 		tempvert.color.x = 1.0;
+		tempvert.color.y = 0.2;
+		tempvert.color.z = 0.2;
 		tempvert.color.w = 1.0;
 
 
@@ -721,19 +723,12 @@ bool InitD3D()
 
 	CreateRaytracingPipeline();
 
-	CreateGlobalConstantBuffer();
-
-
-
-	CreatePerInstanceBuffer();
-
-
 
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
 
-	//CreatePerInstancePropertiesBuffer();
+	CreatePerInstancePropertiesBuffer();
 	CreateCameraBuffer();
 	
 
@@ -826,12 +821,10 @@ void UpdatePipeline() {
 
 		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
-		commandList->DrawIndexedInstanced(18960, 1, 0, 0, 0);
-
+		commandList->DrawIndexedInstanced(teapotIndexNumber, 1, 0, 0, 0);
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
 
@@ -1192,7 +1185,6 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV,0);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV,0/*t0*/);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
 	rsc.AddHeapRangesParameter({{
@@ -1203,11 +1195,11 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 		1/*2nd heap slot*/
 		},
 		
-		//{3/*t3*/,
-	//	1,
-		//0,
-		//D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		//3} /* Per Instance Data*/
+		{3/*t3*/,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		3} /* Per Instance Data*/
 		});
 
 
@@ -1344,7 +1336,7 @@ void CreateRaytracingOutputBuffer()
 }
 void CreateShaderResourceheap()
 {
-	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 3, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 4, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -1377,7 +1369,7 @@ void CreateShaderResourceheap()
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
 	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-/*
+
 	D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
 	perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -1387,7 +1379,7 @@ void CreateShaderResourceheap()
 	perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
 	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);*/
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
 
 
 }
@@ -1411,13 +1403,13 @@ void CreateShaderBindingTable()
 
 
 
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < instances.size()-1; i++)
 	{
-		sbtHelper.AddHitGroup(L"HitGroup",{(void*)perInstanceConstantBuffers[i]->GetGPUVirtualAddress()});
+		sbtHelper.AddHitGroup(L"HitGroup",{(void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress()});
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 
-	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,(void*)(perInstanceConstantBuffers[0]->GetGPUVirtualAddress()),heapPointer});
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,heapPointer});
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	// add triangle shader
 //	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
