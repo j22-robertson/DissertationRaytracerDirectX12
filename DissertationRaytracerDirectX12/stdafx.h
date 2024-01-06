@@ -47,8 +47,8 @@ LPCTSTR WindowName = L"Raytracer";
 
 LPCTSTR WindowTitle = L"Raytracer";
 
-int Width = 800;
-int Height = 600;
+int Width = 1920;
+int Height = 1080;
 
 
 bool FullScreen = false;

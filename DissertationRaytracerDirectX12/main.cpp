@@ -570,8 +570,8 @@ bool InitD3D()
 		tempvert.pos.z = (attribs.vertices[i * 3 + 2] * prescale);
 
 		tempvert.color.x = 1.0;
-		tempvert.color.y = 0.2;
-		tempvert.color.z = 0.2;
+		tempvert.color.y = 1.0;
+		tempvert.color.z = 1.0;
 		tempvert.color.w = 1.0;
 
 
