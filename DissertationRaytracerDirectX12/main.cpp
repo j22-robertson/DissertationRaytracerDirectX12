@@ -1115,7 +1115,7 @@ void CreateAccelerationStructures()
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1,0,0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(1,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0,1,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances, false);

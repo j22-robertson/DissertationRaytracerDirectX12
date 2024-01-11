@@ -68,7 +68,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	//const float3 B = float3(0, 1, 0);
 	//const float3 C = float3(0, 0, 1);
 
-    float roughness = 0.1;
+    float roughness = 0.05;
     float metallic = 1.0;
 
     float3 f0 = float3(0.04, 0.04, 0.04);
@@ -84,7 +84,14 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     float3 normal = normalize(cross(e2, e1));
     
     normal = mul(perInstance[InstanceID()].objectToWorldNormal, float4(normal, 0.f)).xyz;
-    normal = -normal;
+    bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
+
+    if (isBackFacing)
+    {
+        normal = -normal;
+    }
+
+    //normal = -normal;
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
@@ -93,8 +100,36 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     float3 centerLightDir = normalize(lightPos - worldOrigin);
     //bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
 
+    bool isShadowed = dot(normal, centerLightDir);
+
+
     float3 view_direction = normalize(WorldRayOrigin());
 
+
+    ShadowHitInfo shadowPayload;
+    shadowPayload.ishit = false;
+
+    RayDesc ray;
+    ray.Origin = worldOrigin;
+    ray.Direction = centerLightDir;
+    ray.TMin = 0.01;
+    ray.TMax = 100000;
+    bool hit = true;
+
+    TraceRay
+    (SceneBVH,
+        RAY_FLAG_NONE,
+        0xFF,
+        1,
+        0,
+        1,
+        ray,
+        shadowPayload);
+
+    if (!isShadowed)
+    {
+        isShadowed = shadowPayload.ishit;
+    }
     float3 halfway = normalize(view_direction + centerLightDir);
 
     float nDotL = max(0.f, dot(normal, centerLightDir));
@@ -103,7 +138,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     float light_dist = length(lightPos - worldOrigin);
 
-    float attenuation = 1.0 / 1.0 + (0.1 * light_dist);
+    float attenuation = 1.0 / 1.0 + (0.4 * light_dist);
 
     float radiance = float3(1.0, 1.0, 1.0) * attenuation * nDotL;
 
@@ -148,9 +183,9 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
             hitColor = C * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
             break; 
     }*/
-
+    float factor = shadowPayload.ishit ? 0.3 : 1.0;
     //float3 ambient = float3(0.03, 0.03, 0.03) * hitColor * 0.1;
-    float3 Lo = brdf * radiance * nDotL ;
+    float3 Lo = brdf * radiance * nDotL *factor;
     float3 cl =   Lo;
     float3 cl2 = cl / (cl + float3(1.0, 1.0, 1.0));
     float3 cl3 = pow(cl2, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
