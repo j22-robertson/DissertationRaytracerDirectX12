@@ -5,6 +5,7 @@ struct ShadowHitInfo
     bool ishit;
 };
 
+
 struct STriVertex
 {
     float3 vertex;
@@ -68,8 +69,13 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	//const float3 B = float3(0, 1, 0);
 	//const float3 C = float3(0, 0, 1);
 
-    float roughness = 0.05;
-    float metallic = 1.0;
+    float roughness = 0.2;
+    float metallic = 0.0;
+
+    if (InstanceID() == 1)
+    {
+        metallic = 1.0;
+    }
 
     float3 f0 = float3(0.04, 0.04, 0.04);
 	
@@ -102,6 +108,62 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     bool isShadowed = dot(normal, centerLightDir);
 
+    //bool isReflected = roughness<1.0;
+    //payload.currentBounces = payload.CurrentBounces + 1;
+
+   // payload.canReflect = isReflected * payload.canReflect * payload.maxBounces <payload.CurrentBounces;
+
+
+
+    /// TODO: In the pipeline shader config add a new payload with reflection properties
+    /// Will need to calculate the size of the struct in bytes
+    /// Also requires editing raygen for max bounces, num bounces and can reflect variables in the new payload.s
+    float3 reflectionColor = (1.0, 1.0, 1.0);
+    if (payload.canReflect)
+    {
+        HitInfo reflectionPayload;
+        reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
+        float3 reflectedDirection = reflect(normalize(WorldRayDirection()), normal);
+        
+        //float3 checkreflect = reflection * reflection;
+        reflectionPayload.canReflect = false;
+        RayDesc reflectionRay;
+        reflectionRay.Origin = worldOrigin;
+        reflectionRay.Direction = reflectedDirection;
+        reflectionRay.TMin = 0.01;
+        reflectionRay.TMax = 100000;
+
+        TraceRay
+        (SceneBVH,
+            RAY_FLAG_NONE,
+            0xFF,
+            0,
+            0,
+            0,
+            reflectionRay,
+            reflectionPayload);
+        reflectionColor = reflectionPayload.colorAndDistance.xyz;
+
+    }
+
+/*
+    RayDesc reflectionRay;
+    ray.origin = worldorigin;
+    ray.direction = normal;
+    ray.TMin = 0.01;
+    ray.TMax = 100000;
+    bool hit = true;
+
+    TraceRay
+    (SceneBVH,
+        RAY_FLAG_NONE,
+        0xFF,
+        1,
+        0,
+        1,
+        reflectionRay,
+        payload);
+        */
 
     float3 view_direction = normalize(WorldRayOrigin());
 
@@ -138,7 +200,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     float light_dist = length(lightPos - worldOrigin);
 
-    float attenuation = 1.0 / 1.0 + (0.4 * light_dist);
+    float attenuation = 1.0 / 1.0 + 0.05*light_dist+0.005*light_dist*light_dist;
 
     float radiance = float3(1.0, 1.0, 1.0) * attenuation * nDotL;
 
@@ -160,7 +222,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     kd *= 1.0 - metallic;
 
-    float3 brdf = kd * lambert + ks;
+    float3 brdf = (kd * lambert * nDotL) + (ks * reflectionColor);
 
 
     
@@ -184,11 +246,11 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
             break; 
     }*/
     float factor = shadowPayload.ishit ? 0.3 : 1.0;
-    //float3 ambient = float3(0.03, 0.03, 0.03) * hitColor * 0.1;
-    float3 Lo = brdf * radiance * nDotL *factor;
-    float3 cl =   Lo;
+    float3 ambient = float3(0.03, 0.03, 0.03) * hitColor;
+    float3 Lo = brdf * radiance;
+    float3 cl =   (Lo+ ambient) * factor;
     float3 cl2 = cl / (cl + float3(1.0, 1.0, 1.0));
-    float3 cl3 = pow(cl2, float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
+    float3 cl3 = pow(cl2, float3(1.0, 1.0, 1.0)/2.2);
 
   payload.colorAndDistance = float4(cl3, RayTCurrent());
 }

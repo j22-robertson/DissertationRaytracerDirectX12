@@ -570,8 +570,8 @@ bool InitD3D()
 		tempvert.pos.z = (attribs.vertices[i * 3 + 2] * prescale);
 
 		tempvert.color.x = 1.0;
-		tempvert.color.y = 1.0;
-		tempvert.color.z = 1.0;
+		tempvert.color.y = 0.0;
+		tempvert.color.z = 0.0;
 		tempvert.color.w = 1.0;
 
 
@@ -1114,8 +1114,8 @@ void CreateAccelerationStructures()
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1,0,0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0,1,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-0.5,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0.5,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances, false);
@@ -1288,7 +1288,7 @@ void CreateRaytracingPipeline()
 
 
 
-	pipeline.SetMaxPayloadSize(4 * sizeof(float)); /// RGB + DISTANCE
+	pipeline.SetMaxPayloadSize(5 * sizeof(float)); /// RGB + DISTANCE + canReflect
 	pipeline.SetMaxAttributeSize(2 * sizeof(float)); // Barycentric coordinates
 
 
@@ -1299,7 +1299,7 @@ void CreateRaytracingPipeline()
 
 	//path tracing algorithms can be flattened into a simple loop in ray generation
 
-	pipeline.SetMaxRecursionDepth(2);
+	pipeline.SetMaxRecursionDepth(3);
 
 	rtStateObject = pipeline.Generate();
 
