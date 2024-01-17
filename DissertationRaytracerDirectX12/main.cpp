@@ -1114,8 +1114,8 @@ void CreateAccelerationStructures()
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-0.5,0,0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0.5,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-0.6,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0.6,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances, false);
@@ -1195,11 +1195,13 @@ ComPtr<ID3D12RootSignature> CreateHitSignature()
 		1/*2nd heap slot*/
 		},
 		
-		{3/*t3*/,
+		{
+			3/*t3*/,
 		1,
 		0,
 		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		3} /* Per Instance Data*/
+		3
+		} /* Per Instance Data*/
 		});
 
 

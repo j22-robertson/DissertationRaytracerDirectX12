@@ -19,6 +19,10 @@ cbuffer Colors : register(b0)
     float3 C[3];
 };*/
 
+float frand(float2 uv)
+{
+    return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
+}
 
 struct PerInstanceProperties
 {
@@ -57,6 +61,40 @@ float SmithG(float roughness, float3 normal, float3 view_dir, float3 light_dir)
     return SBG(roughness, normal, view_dir) * SBG(roughness, normal, light_dir);
 }
 
+float3 getPerpendicularVector(float3 u)
+{
+    //abs value for positive space
+    float3 a = abs(u);
+
+    //if x is smaller than z and y return 1 else 0
+    uint xm = ((a.x - a.y) < 0 && (a.x - a.z) < 0) ? 1 : 0;
+    // exclusive or, if x = 0 returns 1 and x = 1 returns 0
+    uint ym = (a.y - a.z) < 0 ? (1 ^ xm) : 0;
+    
+    uint zm = 1 ^ (xm | ym);
+
+    return cross(u, float3(xm, ym, zm));
+}
+
+float3 sampleMicrofacet(float2 bary, float roughness, float3 normal)
+{
+    float random = frand(bary);
+    float random2 = frand(float2(bary.y, bary.x));
+
+    float3 B = getPerpendicularVector(normal);
+    float3 T = cross(B, normal);
+
+    float a2 = roughness * roughness;
+
+    float cosThetaH = sqrt(max(.0f, (1.0 - random) / ((a2 - 1.0) * random+1)));
+    float sinThetaH = sqrt(max(0.0f, 1.0f - cosThetaH * cosThetaH));
+    float phiH = random2 * 3.14159265359 * 2.0f;
+
+    return T * (sinThetaH * cos(phiH)) + B * (sinThetaH * sin(phiH)) + normal * cosThetaH;
+
+    
+
+}
 
 [shader("closesthit")] 
 void ClosestHit(inout HitInfo payload, Attributes attrib) 
@@ -69,20 +107,23 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 	//const float3 B = float3(0, 1, 0);
 	//const float3 C = float3(0, 0, 1);
 
-    float roughness = 0.2;
-    float metallic = 0.0;
+    float roughness = 0.0;
+    float metallic = 1.0;
 
-    if (InstanceID() == 1)
-    {
-        metallic = 1.0;
-    }
+    
 
     float3 f0 = float3(0.04, 0.04, 0.04);
 	
     float3 hitColor = BTriVertex[indices[vertId + 0]].color * barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
-    
-     hitColor = pow(hitColor, float3(2.2,2.2,2.2));
-    f0 = lerp(f0, hitColor, metallic);
+
+    if (InstanceID() == 0)
+    {
+        roughness = 1.0;
+        metallic =0.0;
+      //  hitColor = float3(0.23, 0.7, 0.1);
+    }
+     hitColor = pow(hitColor, 2.2);
+    f0 = lerp(f0, hitColor, float3(metallic,metallic,metallic));
 
     float3 e1 = BTriVertex[indices[vertId + 1]].vertex - BTriVertex[indices[vertId + 0]].vertex;
     float3 e2 = BTriVertex[indices[vertId + 2]].vertex - BTriVertex[indices[vertId + 0]].vertex;
@@ -118,33 +159,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     /// TODO: In the pipeline shader config add a new payload with reflection properties
     /// Will need to calculate the size of the struct in bytes
     /// Also requires editing raygen for max bounces, num bounces and can reflect variables in the new payload.s
-    float3 reflectionColor = (1.0, 1.0, 1.0);
-    if (payload.canReflect)
-    {
-        HitInfo reflectionPayload;
-        reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
-        float3 reflectedDirection = reflect(normalize(WorldRayDirection()), normal);
-        
-        //float3 checkreflect = reflection * reflection;
-        reflectionPayload.canReflect = false;
-        RayDesc reflectionRay;
-        reflectionRay.Origin = worldOrigin;
-        reflectionRay.Direction = reflectedDirection;
-        reflectionRay.TMin = 0.01;
-        reflectionRay.TMax = 100000;
-
-        TraceRay
-        (SceneBVH,
-            RAY_FLAG_NONE,
-            0xFF,
-            0,
-            0,
-            0,
-            reflectionRay,
-            reflectionPayload);
-        reflectionColor = reflectionPayload.colorAndDistance.xyz;
-
-    }
+   
 
 /*
     RayDesc reflectionRay;
@@ -165,7 +180,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
         payload);
         */
 
-    float3 view_direction = normalize(WorldRayOrigin());
+    float3 view_direction = normalize(-WorldRayDirection());
 
 
     ShadowHitInfo shadowPayload;
@@ -200,55 +215,69 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     float light_dist = length(lightPos - worldOrigin);
 
-    float attenuation = 1.0 / 1.0 + 0.05*light_dist+0.005*light_dist*light_dist;
+    float attenuation = 1.0 /  1.0 + 0.05 * light_dist + 0.005 * light_dist * light_dist;
 
-    float radiance = float3(1.0, 1.0, 1.0) * attenuation * nDotL;
+    float radiance = float3(1.0, 1.0, 1.0) * attenuation;//* max(dot(halfway,centerLightDir),0.0);
 
-    float3 lambert = hitColor/3.14159265;
+    float3 lambert = hitColor/3.14159265359;
 
-    float fschlick = f0 + (float3(1.0, 1.0, 1.0)-f0) * pow(1.0 - max(dot(view_direction, halfway), 0.0), 5.0);
+    float3 fschlick = f0 + (float3(1.0, 1.0, 1.0)-f0) * pow(1.0 - max(dot(halfway, view_direction), 0.0), 5.0);
 
     float D = TrowbridgeReitzD(roughness, nDotH);
-
+        
     float G = SmithG(roughness, normal, view_direction, centerLightDir);
     
     float numerator = D * G * fschlick;
-    float denominator = 4.0 * nDotV * nDotL;
-    denominator = max(denominator, 0.000001);
+    float denominator = 4.0 * nDotV*nDotL;
+    denominator = max(denominator, 0.0000001);
 
-    float ks = numerator / denominator;
+    float specular = numerator / denominator;
 
     float3 kd = float3(1.0, 1.0, 1.0) - fschlick;
 
     kd *= 1.0 - metallic;
 
-    float3 brdf = (kd * lambert * nDotL) + (ks * reflectionColor);
 
 
-    
-    
-    //float3 hitColor;
-	
-  // if (InstanceID() < 3)
-   //{
-     //   hitColor = A[InstanceID()] * barycentrics.x + B[InstanceID()] * barycentrics.y * C[InstanceID()] + barycentrics.z;
-  // }
-    /*
-    switch (InstanceID())
+    float3 reflectionColor = (1.0, 1.0, 1.0);
+    if (payload.canReflect)
     {
-		case 0:
-            break;
-		case 1:
-            hitColor = B * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
-            break;
-		case 2:
-            hitColor = C * barycentrics.x + B * barycentrics.y + C * barycentrics.z;
-            break; 
-    }*/
+        HitInfo reflectionPayload;
+        reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
+
+        float3 microfacet =  sampleMicrofacet(attrib.bary, roughness, normal);
+        float3 reflectedDirection = reflect(-view_direction,microfacet);
+
+        //float3 checkreflect = reflection * reflection;
+        reflectionPayload.canReflect = false;
+        RayDesc reflectionRay;
+        reflectionRay.Origin = worldOrigin;
+        reflectionRay.Direction = reflectedDirection;
+        reflectionRay.TMin = 0.01;
+        reflectionRay.TMax = 100000;
+
+        TraceRay
+        (SceneBVH,
+            RAY_FLAG_NONE,
+            0xFF,
+            0,
+            0,
+            0,
+            reflectionRay,
+            reflectionPayload);
+        reflectionColor = reflectionPayload.colorAndDistance.xyz;
+
+    }
+
+
+//
+ //   float3 brdf = (kd * lambert + specular * reflectionColor) * radiance*nDotL;
+
+    
     float factor = shadowPayload.ishit ? 0.3 : 1.0;
     float3 ambient = float3(0.03, 0.03, 0.03) * hitColor;
-    float3 Lo = brdf * radiance;
-    float3 cl =   (Lo+ ambient) * factor;
+    float3 Lo = factor * (kd * lambert + specular * reflectionColor)*radiance * nDotL;
+    float3 cl = Lo + ambient;
     float3 cl2 = cl / (cl + float3(1.0, 1.0, 1.0));
     float3 cl3 = pow(cl2, float3(1.0, 1.0, 1.0)/2.2);
 
