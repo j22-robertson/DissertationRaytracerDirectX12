@@ -717,8 +717,7 @@ bool InitD3D()
 	indexBufferView.Format = DXGI_FORMAT_R32_UINT,
 	indexBufferView.SizeInBytes = iBufferTeapotSize;
 	
-
-
+	CreatePlaneVB();
 
 
 
@@ -726,7 +725,7 @@ bool InitD3D()
 	commandList->ResourceBarrier(1, &rbtemp);
 
 
-	CreatePlaneVB();
+	//CreatePlaneVB();
 
 	CheckRayTracingSupport();
 
@@ -838,7 +837,7 @@ void UpdatePipeline() {
 		commandList->SetGraphicsRootDescriptorTable(0, handle);
 		commandList->SetGraphicsRootDescriptorTable(1, handle);
 
-		commandList->SetGraphicsRoot32BitConstant(2, 0, 0);
+	//	commandList->SetGraphicsRoot32BitConstant(2, 0, 0);
 
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
@@ -1648,8 +1647,8 @@ void CreatePlaneVB()
 	planeBuffer->Unmap(0, nullptr);
 
 	planeBufferview.BufferLocation = planeBuffer->GetGPUVirtualAddress();
-	planeBufferview.SizeInBytes = sizeof(Vertex);
-	planeBufferview.StrideInBytes = planeBufferSize;
+	planeBufferview.StrideInBytes = sizeof(Vertex);
+	planeBufferview.SizeInBytes = planeBufferSize;
 
 }
 void OnKeyUp(UINT8 key)

@@ -22,7 +22,7 @@ struct id
 
 struct VS_INPUT
 {
-    float3 pos : POSITION;
+    float4 pos : POSITION;
     float4 color : COLOR;
 };
 
@@ -34,13 +34,13 @@ struct VS_OUTPUT
 
 VS_OUTPUT main(VS_INPUT input, id Id)
 {
-    
-    float4 pos = float4(input.pos, 1);
-    pos = mul(perInstance[Id.id].objectToWorld, pos);
+
+	float4 pos = mul(perInstance[Id.id].objectToWorld, input.pos);
     pos = mul(view, pos);
     pos = mul(projection, pos);
     
     VS_OUTPUT output;
+
     output.pos = pos;
     output.color = input.color;
     // just pass vertex position straight through
