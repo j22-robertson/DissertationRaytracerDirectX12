@@ -4,9 +4,21 @@ cbuffer CameraParams : register(b0)
     float4x4 projection;
 }
 
+struct PerInstanceProperties
+{
+    float4x4 objectToWorld;
+    float4x4 objectToWorldNormal;
+};
 
 
+StructuredBuffer<PerInstanceProperties> perInstance : register(t0);
 
+uint instanceIndex: register(b1);
+
+struct id
+{
+    uint id: SV_InstanceID;
+};
 
 struct VS_INPUT
 {
@@ -20,10 +32,11 @@ struct VS_OUTPUT
     float4 color : COLOR;
 };
 
-VS_OUTPUT main(VS_INPUT input)
+VS_OUTPUT main(VS_INPUT input, id Id)
 {
     
-    float4 pos = { input.pos.xyz, 0 };
+    float4 pos = float4(input.pos, 1);
+    pos = mul(perInstance[Id.id].objectToWorld, pos);
     pos = mul(view, pos);
     pos = mul(projection, pos);
     

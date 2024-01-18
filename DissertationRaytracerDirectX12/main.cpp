@@ -375,9 +375,20 @@ bool InitD3D()
 
 	constantParameter.InitAsDescriptorTable(1, &range, D3D12_SHADER_VISIBILITY_ALL);
 
+	CD3DX12_ROOT_PARAMETER matricesParameter;
+	CD3DX12_DESCRIPTOR_RANGE matricesRange;
+
+	matricesRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, 1);
+	matricesParameter.InitAsDescriptorTable(1, &matricesRange, D3D12_SHADER_VISIBILITY_ALL);
+
+	CD3DX12_ROOT_PARAMETER indexParameter;
+	indexParameter.InitAsConstants(1, 1);
+
+	std::vector<CD3DX12_ROOT_PARAMETER> parameters = { constantParameter,matricesParameter,indexParameter };
+
 
 	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-	rootSignatureDesc.Init(1, &constantParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	rootSignatureDesc.Init(static_cast<UINT>(parameters.size()),parameters.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
 
@@ -475,6 +486,7 @@ bool InitD3D()
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.NumRenderTargets = 1;
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 
 	hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStateObject));
 
@@ -723,13 +735,14 @@ bool InitD3D()
 
 	CreateRaytracingPipeline();
 
+	CreatePerInstancePropertiesBuffer();
+	CreateCameraBuffer();
 
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
 
-	CreatePerInstancePropertiesBuffer();
-	CreateCameraBuffer();
+
 	
 
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
@@ -813,18 +826,24 @@ void UpdatePipeline() {
 	{
 		std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
-
 		commandList->SetGraphicsRootDescriptorTable(
 			0, constHeap->GetGPUDescriptorHandleForHeapStart());
 
-
-
 		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		D3D12_GPU_DESCRIPTOR_HANDLE handle = constHeap->GetGPUDescriptorHandleForHeapStart();
+		commandList->SetGraphicsRootDescriptorTable(0, handle);
+		commandList->SetGraphicsRootDescriptorTable(1, handle);
+
+		commandList->SetGraphicsRoot32BitConstant(2, 0, 0);
+
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
-		commandList->DrawIndexedInstanced(teapotIndexNumber, 3, 0, 0, 0);
+		commandList->DrawIndexedInstanced(teapotIndexNumber, instances.size()-1, 0, 0, 0);
+
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
 
@@ -1447,7 +1466,7 @@ void CreateCameraBuffer()
 	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
 	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
 	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
+		device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
 	);
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
@@ -1460,7 +1479,8 @@ void CreateCameraBuffer()
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
 
-	/*/// TODO: Move creation of PerInstanceProperties view out of this function
+
+	// TODO: Move creation of PerInstanceProperties view out of this function
 	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
@@ -1471,9 +1491,9 @@ void CreateCameraBuffer()
 	srvDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
 	srvDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
 	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	
 
-	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);*/
-
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);
 
 
 }
@@ -1648,7 +1668,7 @@ void OnKeyUp(UINT8 key)
 
 void CreatePerInstancePropertiesBuffer()
 {
-	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size() * sizeof(PerInstanceProperties)), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size()) * sizeof(PerInstanceProperties), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
 	perInstancePropertiesBuffer = nv_helpers_dx12::CreateBuffer(device, buffersize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
 
