@@ -118,11 +118,11 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     if (InstanceID() == 0)
     {
-        roughness = 1.0;
+        roughness = 0.0;
         metallic =0.0;
       //  hitColor = float3(0.23, 0.7, 0.1);
     }
-     hitColor = pow(hitColor, 2.2);
+    
     f0 = lerp(f0, hitColor, float3(metallic,metallic,metallic));
 
     float3 e1 = BTriVertex[indices[vertId + 1]].vertex - BTriVertex[indices[vertId + 0]].vertex;
@@ -142,12 +142,12 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
-    float3 lightPos = float3(2, 10, -2);
+    float3 lightPos = float3(2, 3, 2);
     
     float3 centerLightDir = normalize(lightPos - worldOrigin);
     //bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
 
-    bool isShadowed = dot(normal, centerLightDir);
+    bool isShadowed = dot(normal, centerLightDir) < 0.f;
 
     //bool isReflected = roughness<1.0;
     //payload.currentBounces = payload.CurrentBounces + 1;
@@ -215,9 +215,9 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     float light_dist = length(lightPos - worldOrigin);
 
-    float attenuation = 1.0 /  1.0 + 0.05 * light_dist + 0.005 * light_dist * light_dist;
+    //float attenuation = 1.0 /(light_dist*light_dist);
 
-    float radiance = float3(1.0, 1.0, 1.0) * attenuation;//* max(dot(halfway,centerLightDir),0.0);
+    //float radiance = float3(15.0, 15.0, 15.0) * attenuation;//* max(dot(halfway,centerLightDir),0.0);
 
     float3 lambert = hitColor/3.14159265359;
 
@@ -240,7 +240,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
 
     float3 reflectionColor = (1.0, 1.0, 1.0);
-    if (payload.canReflect)
+    if (payload.current<payload.maxDepth)
     {
         HitInfo reflectionPayload;
         reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
@@ -251,6 +251,8 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
         //float3 checkreflect = reflection * reflection;
         reflectionPayload.canReflect = false;
         RayDesc reflectionRay;
+        reflectionPayload.maxDepth = payload.maxDepth;
+        reflectionPayload.current = payload.current + 1.0;
         reflectionRay.Origin = worldOrigin;
         reflectionRay.Direction = reflectedDirection;
         reflectionRay.TMin = 0.01;
@@ -276,8 +278,8 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     
     float factor = shadowPayload.ishit ? 0.3 : 1.0;
     float3 ambient = float3(0.03, 0.03, 0.03) * hitColor;
-    float3 Lo = factor * (kd * lambert + specular * reflectionColor)*radiance * nDotL;
-    float3 cl = Lo + ambient;
+    float3 Lo = (kd * lambert + (specular*reflectionColor)) * factor * nDotL;
+    float3 cl = Lo + ambient;// + radiance;
     float3 cl2 = cl / (cl + float3(1.0, 1.0, 1.0));
     float3 cl3 = pow(cl2, float3(1.0, 1.0, 1.0)/2.2);
 
@@ -296,7 +298,7 @@ void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
 
 
     // Hard coded light position
-    float3 lightPos = float3(2, 10, -2);
+    float3 lightPos = float3(2,10, -2);
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     

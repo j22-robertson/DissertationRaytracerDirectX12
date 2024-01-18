@@ -7,6 +7,8 @@ struct HitInfo
 {
   float4 colorAndDistance;
   bool canReflect;
+  float maxDepth;
+  float current;
 };
 
 

@@ -20,6 +20,8 @@ void RayGen() {
   HitInfo payload;
   payload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
   payload.canReflect = true;
+  payload.maxDepth = 2.0;
+  payload.current = 0;
  
 
   // Get the location within the dispatched 2D grid of work items

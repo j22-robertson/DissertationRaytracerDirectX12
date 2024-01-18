@@ -824,7 +824,7 @@ void UpdatePipeline() {
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
-		commandList->DrawIndexedInstanced(teapotIndexNumber, 1, 0, 0, 0);
+		commandList->DrawIndexedInstanced(teapotIndexNumber, 3, 0, 0, 0);
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
 
@@ -1290,7 +1290,7 @@ void CreateRaytracingPipeline()
 
 
 
-	pipeline.SetMaxPayloadSize(5 * sizeof(float)); /// RGB + DISTANCE + canReflect
+	pipeline.SetMaxPayloadSize(7 * sizeof(float)); /// RGB + DISTANCE + canReflect + maxdepth + currentdepth
 	pipeline.SetMaxAttributeSize(2 * sizeof(float)); // Barycentric coordinates
 
 
@@ -1301,7 +1301,7 @@ void CreateRaytracingPipeline()
 
 	//path tracing algorithms can be flattened into a simple loop in ray generation
 
-	pipeline.SetMaxRecursionDepth(3);
+	pipeline.SetMaxRecursionDepth(4);
 
 	rtStateObject = pipeline.Generate();
 
@@ -1382,6 +1382,7 @@ void CreateShaderResourceheap()
 	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 
 }
