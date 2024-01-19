@@ -143,6 +143,7 @@ void UpdatePipeline();
 
 void Render();
 
+void createDepthBuffer();
 
 void WaitForPreviousFrame();
 void Cleanup();
@@ -181,6 +182,8 @@ std::vector<ComPtr<ID3D12Resource>> perInstanceConstantBuffers;
 
 uint32_t cameraBufferSize = 0;
 
+ComPtr<ID3D12DescriptorHeap> dsvHeap;
+ComPtr<ID3D12Resource> depthBuffer;
 
 
 nv_helpers_dx12::ShaderBindingTableGenerator sbtHelper;

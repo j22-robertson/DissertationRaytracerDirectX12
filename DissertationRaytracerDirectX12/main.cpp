@@ -487,6 +487,8 @@ bool InitD3D()
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.NumRenderTargets = 1;
 	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineStateObject));
 
@@ -782,6 +784,7 @@ bool InitD3D()
 	scissorRect.bottom = Height;
 
 
+	createDepthBuffer();
 
 
 	return true;
@@ -819,10 +822,12 @@ void UpdatePipeline() {
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameIndex, rtvDescriptorSize);
 
-	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(dsvHeap->GetCPUDescriptorHandleForHeapStart());
+	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	if (m_raster)
 	{
+		commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
 		std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 		commandList->SetGraphicsRootDescriptorTable(
@@ -1001,6 +1006,29 @@ void Render() {
 	{
 		Running = false;
 	}
+}
+
+void createDepthBuffer()
+{
+	dsvHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 1,D3D12_DESCRIPTOR_HEAP_TYPE_DSV, false);
+
+	D3D12_HEAP_PROPERTIES depthHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+
+
+	D3D12_RESOURCE_DESC depthResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, Width, Height, 1, 1);
+
+	depthResourceDesc.Flags  |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	CD3DX12_CLEAR_VALUE depthOptimizedClearValue(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
+	ThrowIfFailed(device->CreateCommittedResource(
+		&depthHeapProps, D3D12_HEAP_FLAG_NONE, &depthResourceDesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthOptimizedClearValue, IID_PPV_ARGS(&depthBuffer)),L"Unable to create depth buffer resource");
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+	device->CreateDepthStencilView(depthBuffer.Get(), &dsvDesc,
+		dsvHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
 
