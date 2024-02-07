@@ -1160,8 +1160,8 @@ void CreateAccelerationStructures()
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-0.6,0,0)},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(0.6,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1.0,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(1.0,0,0)},
 		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
 
 	CreateTopLevelAS(instances, false);
