@@ -142,7 +142,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
-    float3 lightPos = float3(2, 10, 2);
+    float3 lightPos = float3(2, 10, -2);
     
     float3 centerLightDir = normalize(lightPos - worldOrigin);
     //bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;

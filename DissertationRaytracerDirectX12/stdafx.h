@@ -34,7 +34,7 @@ template<typename T> _Post_equal_to_(pp) _Post_satisfies_(return == pp) void** I
 #define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = 0; } }
 
 
-
+/*
 
 //Window Handle
 HWND hwnd = NULL;
@@ -233,9 +233,9 @@ ComPtr<ID3D12Resource> perInstancePropertiesBuffer;
 
 void CreatePerInstancePropertiesBuffer();
 
-void UpdatePerInstanceProperties();
-
+void UpdatePerInstanceProperties();*/
+/*
 struct PerInstanceProperties {
 	DirectX::XMMATRIX objectToWorld;
 	DirectX::XMMATRIX objectToWorldNormal;
-};
+};*/

@@ -1,207 +1,214 @@
-//#include "stdafx.h"
 #include "RenderApplication.h"
-//#include "DXRHelper.h"
-//#include "BottomLevelASGenerator.h"
-//#include "RaytracingPipelineGenerator.h"
-//#include "RootSignatureGenerator.h"
-//#include "tiny_obj_loader.h"
+
+#include "BottomLevelASGenerator.h"
+#include "DXRHelper.h"
+#include "RaytracingPipelineGenerator.h"
+#include "RootSignatureGenerator.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
 
-
-//TODO: MOVE OUT OF MAIN
-//#define TINYOBJLOADER_IMPLEMENTATION
-//#include "tiny_obj_loader.h"
-
-//#include "imgui.h"
-
-//std::string inputfile = "teapot.obj.txt";
-//tinyobj::ObjReaderConfig reader_config;
-//tinyobj::ObjReader reader;
-
-
-//UINT teapotVertNumber;
-//UINT teapotIndexNumber;
-
-// See vertices for model loading
-
-/*
-
-
-struct Vertex {
-	Vertex(float x, float y, float z, float r, float g, float b, float a) : pos(x, y, z), color(r, g, b, a) {}
-	DirectX::XMFLOAT3 pos;
-	DirectX::XMFLOAT4 color;
-};
-
-
-
-
-
-
-
-bool InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen)
+void RenderApplication::createDepthBuffer()
 {
-	if (fullscreen)
-	{
-		HMONITOR hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+	dsvHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, false);
 
-		MONITORINFO mi = { sizeof(mi) };
-
-		GetMonitorInfo(hmon, &mi);
-
-		width = mi.rcMonitor.right - mi.rcMonitor.left;
-
-		height = mi.rcMonitor.bottom - mi.rcMonitor.top;
-
-	}
+	D3D12_HEAP_PROPERTIES depthHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
 
-	//Window structure setup
-	WNDCLASSEX wc;
-	wc.cbSize = sizeof(WNDCLASSEX);
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpfnWndProc = WndProc;
-	wc.cbClsExtra = NULL;
-	wc.cbWndExtra = NULL;
-	wc.hInstance = hInstance;
-	wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 2);
-	wc.lpszMenuName = NULL;
-	wc.lpszClassName = WindowName;
-	wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+	D3D12_RESOURCE_DESC depthResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, Width, Height, 1, 1);
+
+	depthResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	CD3DX12_CLEAR_VALUE depthOptimizedClearValue(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
+	ThrowIfFailed(device->CreateCommittedResource(
+		&depthHeapProps, D3D12_HEAP_FLAG_NONE, &depthResourceDesc,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthOptimizedClearValue, IID_PPV_ARGS(&depthBuffer)), L"Unable to create depth buffer resource");
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+
+	device->CreateDepthStencilView(depthBuffer.Get(), &dsvDesc,
+		dsvHeap->GetCPUDescriptorHandleForHeapStart());
+}
+
+void RenderApplication::CreateCameraBuffer()
+{
+
+	uint32_t nbMatrix = 4; // View, Perspective, View inv, Perspective inv
+
+	cameraBufferSize = nbMatrix * sizeof(DirectX::XMMATRIX);
+	cameraBuffer = nv_helpers_dx12::CreateBuffer(device, cameraBufferSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+
+	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
+	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
+	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
+		device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
+	);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+
+	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = cameraBufferSize;
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = constHeap->GetCPUDescriptorHandleForHeapStart();
+
+	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
 
 
+	// TODO: Move creation of PerInstanceProperties view out of this function
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+	srvDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 
-	if (!RegisterClassEx(&wc))
-	{
-		MessageBox(NULL, L"Error registering class", L"Error", MB_OK | MB_ICONERROR);
-		return false;
-	}
-
-
-	hwnd = CreateWindowEx(NULL,
-		WindowName,
-		WindowTitle,
-		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT,
-		width, height,
-		NULL,
-		NULL,
-		hInstance,
-		NULL);
-
-	if (!hwnd)
-	{
-		MessageBox(NULL, L"Error creating window", L"Error", MB_OK | MB_ICONERROR);
-		return false;
-	}
-
-	if (fullscreen)
-	{
-		SetWindowLong(hwnd, GWL_STYLE, 0);
-	}
-
-	ShowWindow(hwnd, ShowWnd);
-	UpdateWindow(hwnd);
-
-	return true;
-
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);
 
 }
 
-
-
-void mainloop()
+void RenderApplication::UpdateCameraBuffer()
 {
-	MSG msg;
-	ZeroMemory(&msg, sizeof(MSG));
+	auto matrices = cameraController.GetCameraData(Width, Height);
 
+	std::uint8_t* pdata;
 
-	while (msg.message != WM_QUIT)
+	ThrowIfFailed(cameraBuffer->Map(0, nullptr, (void**)&pdata), L"Failed to map camera buffer");
+
+	memcpy(pdata, matrices.data(), cameraBufferSize);
+
+	cameraBuffer->Unmap(0, nullptr);
+}
+
+void RenderApplication::OnKeyUp(UINT8 key)
+{
+	if (key == VK_UP)
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-		else {
-			UpdateCameraBuffer();
-			game_time++;
-			instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
-				}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f* cosf(game_time / 20.0f),0.0f);
-			UpdatePerInstanceProperties();
-			Render();
-			
-			//Update loop goes here
-		}
+	//	m_raster = !m_raster;
+	}
+	if (key == VK_DOWN)
+	{
+	//	cameraController.MoveForward();
 	}
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+void RenderApplication::CreatePlaneVB()
 {
-	switch (msg)
-	{
-	case WM_KEYUP:
-		{
-			OnKeyUp(static_cast<UINT8>(wParam));
+	Vertex planeVertices[] = {
+ {-1.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 0
+ {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
+ {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
+ {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
+ {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
+ {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}  // 4
+	};
 
-			return 0;
-		}
-	case WM_KEYDOWN:
-		{
-			if (wParam == VK_ESCAPE) {
-				if (MessageBox(0, L"Are you sure you want to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
-					DestroyWindow(hWnd);
-			}
-			return 0;
-		}
-	case WM_DESTROY:
-		{
-			PostQuitMessage(0);
-			return 0;
-		}
+	const UINT planeBufferSize = sizeof(planeVertices);
 
-	}
-	return DefWindowProc(hWnd, msg, wParam, lParam);
+	///Todo: USING UPLOAD HEAPS FOR VBO IS NOT A GOOD IDEA. Why?
+	/// - The upload heap will be marshalled over every time the GPU needs it
+	///The upload heap is used here for temporary code simplicity
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// READ UP ON DEFAULT HEAP USAGE
+	/// 
+	CD3DX12_HEAP_PROPERTIES heapProperty = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
-}
-*/
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
-{
-	/*
-	if (!InitializeWindow(hInstance, nCmdShow, Width, Height, FullScreen))
-	{
-		MessageBox(0, L"Window Initializaiton - Failed", L"Error", MB_OK);
-		return 0;
-	}
-	if (!InitD3D())
-	{
-		MessageBox(0, L"Failed to initialize DX12",L"Error", MB_OK);
+	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(planeBufferSize);
 
-		Cleanup();
-		return 1;
-	}
-	mainloop();
+	ThrowIfFailed(device->CreateCommittedResource(&heapProperty, D3D12_HEAP_FLAG_NONE, &bufferResource, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&planeBuffer)), L"Unable to create Plane VBO");
 
-	WaitForPreviousFrame();
-	CloseHandle(fenceEvent);
+	UINT8* pVertexDatabegin;
+	CD3DX12_RANGE readRange(0, 0);
 
-	Cleanup();
+	ThrowIfFailed(planeBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDatabegin)), L"Unable to create plane vertex buffer");
 
+	memcpy(pVertexDatabegin, planeVertices, sizeof(planeVertices));
 
-	return 0;*/
+	planeBuffer->Unmap(0, nullptr);
 
-	RenderApplication app;
-	app.setup(hInstance, nCmdShow, 1920, 1080, true);
-
-	return 0;
+	planeBufferview.BufferLocation = planeBuffer->GetGPUVirtualAddress();
+	planeBufferview.StrideInBytes = sizeof(Vertex);
+	planeBufferview.SizeInBytes = planeBufferSize;
 }
 
-/*
-bool InitD3D()
+void RenderApplication::CreatePerInstanceBuffer()
+{
+	DirectX::XMVECTOR bufferData[] =
+	{
+	DirectX::XMVECTOR{1.0f, 0.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.4f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.7f, 0.0f, 1.0f},
+
+	// B
+	DirectX::XMVECTOR{0.0f, 1.0f, 0.0f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.7f, 0.4f, 1.0f},
+	DirectX::XMVECTOR{0.0f, 0.4f, 0.7f, 1.0f},
+
+	// C
+	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
+	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
+	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
+	};
+
+
+
+
+	perInstanceConstantBuffers.resize(3);
+
+	int i(0);
+	for (auto& buffer : perInstanceConstantBuffers)
+	{
+		const uint32_t bufferSize = sizeof(DirectX::XMVECTOR) * 3;
+		buffer = nv_helpers_dx12::CreateBuffer(device, bufferSize, D3D12_RESOURCE_FLAG_NONE,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+		uint8_t* pData;
+
+		ThrowIfFailed(buffer->Map(0, nullptr, (void**)&pData), L"Unable to load per instance constant buffer");
+		memcpy(pData, &bufferData[i * 3], bufferSize);
+		buffer->Unmap(0, nullptr);
+		i++;
+	}
+}
+
+void RenderApplication::CreatePerInstancePropertiesBuffer()
+{
+	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size()) * sizeof(PerInstanceProperties), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+
+	perInstancePropertiesBuffer = nv_helpers_dx12::CreateBuffer(device, buffersize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+}
+
+void RenderApplication::UpdatePerInstancePropertiesBuffer()
+{
+	PerInstanceProperties* current = nullptr;
+	CD3DX12_RANGE readRange(0, 0);
+	ThrowIfFailed(perInstancePropertiesBuffer->Map(0, &readRange, reinterpret_cast<void**>(&current)), L"Unable to map instance properties");
+	for (const auto& instance : instances)
+	{
+		current->objectToWorld = instance.second;
+		DirectX::XMMATRIX upper3x3 = instance.second;
+		upper3x3.r[0].m128_f32[3] = 0.f;
+		upper3x3.r[1].m128_f32[3] = 0.f;
+		upper3x3.r[2].m128_f32[3] = 0.f;
+		upper3x3.r[3].m128_f32[0] = 0.f;
+		upper3x3.r[3].m128_f32[1] = 0.f;
+		upper3x3.r[3].m128_f32[2] = 0.f;
+		upper3x3.r[3].m128_f32[3] = 1.f;
+		DirectX::XMVECTOR det;
+		current->objectToWorldNormal = XMMatrixTranspose(XMMatrixInverse(&det, upper3x3));
+		current++;
+	}
+	perInstancePropertiesBuffer->Unmap(0, nullptr);
+}
+
+bool RenderApplication::InitD3D()
 {
 	HRESULT hr;
 
@@ -400,7 +407,7 @@ bool InitD3D()
 
 
 	CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-	rootSignatureDesc.Init(static_cast<UINT>(parameters.size()),parameters.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	rootSignatureDesc.Init(static_cast<UINT>(parameters.size()), parameters.data(), 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	ID3DBlob* signature;
 
@@ -446,7 +453,7 @@ bool InitD3D()
 	vertexShaderBytecode.pShaderBytecode = vertexShader->GetBufferPointer();
 
 	ID3DBlob* pixelShader;
-	
+
 	hr = D3DCompileFromFile(L"PixelShader.hlsl",
 		nullptr,
 		nullptr,
@@ -516,7 +523,7 @@ bool InitD3D()
 	{
 		if (!reader.Error().empty())
 		{
-			std::printf( "unable to read file");
+			std::printf("unable to read file");
 
 		}
 	}
@@ -532,7 +539,7 @@ bool InitD3D()
 	for (auto index : importIndices)
 	{
 		teapotIndices.push_back(static_cast<UINT>(index.vertex_index));
-		
+
 
 
 	}
@@ -560,7 +567,7 @@ bool InitD3D()
 	{
 		size_t faceNum = size_t(shapes[0].mesh.num_face_vertices[i]);
 
-		
+
 		for (size_t v = 0; v < faceNum; v++)
 		{
 			Vertex tempvert = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
@@ -584,15 +591,12 @@ bool InitD3D()
 
 		}*/
 
-
-/*
-
-	for (size_t i = 0; i < attribs.vertices.size()/3; i++ )
+	for (size_t i = 0; i < attribs.vertices.size() / 3; i++)
 	{
 
 
 
-		Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0 };	
+		Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0 };
 
 		tempvert.pos.x = (attribs.vertices[i * 3 + 0] * prescale);
 		tempvert.pos.y = (attribs.vertices[i * 3 + 1] * prescale);
@@ -616,13 +620,13 @@ bool InitD3D()
 
 	int vBufferTeapotSize = teapotVertNumber * sizeof(Vertex);
 
-	const UINT iBufferTeapotSize= static_cast<UINT>(teapotIndexNumber) * sizeof(UINT);
+	const UINT iBufferTeapotSize = static_cast<UINT>(teapotIndexNumber) * sizeof(UINT);
 
 
 
 	//// TEMP TRIANGLE SETUP
 
-	
+
 	//triangle
 	/*
 	Vertex vList[] = {
@@ -645,14 +649,13 @@ bool InitD3D()
 
 
 	int vBufferRectSize = sizeof(vListRect);
-	
+
 	const UINT iBufferSize = static_cast<UINT>(indices.size()) * sizeof(UINT);
 
 
 	int vBufferSize = sizeof(vListRect);
 */
-	//FIX LVLALUE
-/*
+//FIX LVLALUE
 	auto heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	auto resource_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferTeapotSize);
 
@@ -711,7 +714,7 @@ bool InitD3D()
 	//FIX LVALUE
 	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(vertexBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
-	
+
 
 	CD3DX12_HEAP_PROPERTIES iBufferHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(iBufferTeapotSize);
@@ -722,19 +725,19 @@ bool InitD3D()
 		&bufferResource,
 		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
 		IID_PPV_ARGS(&indexBuffer)
-	),L"Unable to create Index Buffer for Rect");
+	), L"Unable to create Index Buffer for Rect");
 
 	UINT8* pIndexDataBegin;
 	D3D12_RANGE readRange = { 0,0 };
 
-	ThrowIfFailed(indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin)),L"Unable to map index buffer");
+	ThrowIfFailed(indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin)), L"Unable to map index buffer");
 	memcpy(pIndexDataBegin, teapotIndices.data(), iBufferTeapotSize);
 	indexBuffer->Unmap(0, nullptr);
 
 	indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
 	indexBufferView.Format = DXGI_FORMAT_R32_UINT,
-	indexBufferView.SizeInBytes = iBufferTeapotSize;
-	
+		indexBufferView.SizeInBytes = iBufferTeapotSize;
+
 	CreatePlaneVB();
 
 
@@ -745,7 +748,7 @@ bool InitD3D()
 
 	//CreatePlaneVB();
 
-	CheckRayTracingSupport();
+	//CheckRayTracingSupport();
 
 	CreateAccelerationStructures();
 
@@ -760,7 +763,7 @@ bool InitD3D()
 
 
 
-	
+
 
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
@@ -773,7 +776,7 @@ bool InitD3D()
 
 	//Increment fence otheriwse buffer may not be uploaded by draw time
 	fenceValue[frameIndex]++;
-	
+
 	hr = commandQueue->Signal(fence[frameIndex], fenceValue[frameIndex]);
 
 	if (FAILED(hr))
@@ -807,8 +810,167 @@ bool InitD3D()
 
 }
 
-void UpdatePipeline() {
-	HRESULT hr;
+
+LRESULT CALLBACK RenderApplication::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_KEYUP:
+	{
+		OnKeyUp(static_cast<UINT8>(wParam));
+
+		return 0;
+	}
+	case WM_KEYDOWN:
+	{
+		if (wParam == VK_ESCAPE) {
+			if (MessageBox(0, L"Are you sure you want to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+				DestroyWindow(hWnd);
+		}
+		return 0;
+	}
+	case WM_DESTROY:
+	{
+		PostQuitMessage(0);
+		return 0;
+	}
+
+	}
+	return DefWindowProc(hWnd, msg, wParam, lParam);
+
+}
+
+int RenderApplication::setup(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen)
+{
+	if (!InitializeWindow(hInstance, ShowWnd, Width, Height, FullScreen))
+	{
+		MessageBox(0, L"Window Initializaiton - Failed", L"Error", MB_OK);
+		return 1;
+	}
+	if (!InitD3D())
+	{
+		MessageBox(0, L"Failed to initialize DX12", L"Error", MB_OK);
+
+		Cleanup();
+		return 2;
+	}
+	mainloop();
+
+	WaitForPreviousFrame();
+	CloseHandle(fenceEvent);
+
+	//Cleanup();
+//	InitializeWindow(hInstance, ShowWnd, width, height, fullscreen);
+//	InitD3D();
+
+	return 0;
+}
+
+bool RenderApplication::InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen)
+{
+		if (fullscreen)
+	{
+		HMONITOR hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+
+		MONITORINFO mi = { sizeof(mi) };
+
+		GetMonitorInfo(hmon, &mi);
+
+		width = mi.rcMonitor.right - mi.rcMonitor.left;
+
+		height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+	}
+
+
+	//Window structure setup
+	WNDCLASSEX wc;
+	wc.cbSize = sizeof(WNDCLASSEX);
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.lpfnWndProc = WndProc;
+	wc.cbClsExtra = NULL;
+	wc.cbWndExtra = NULL;
+	wc.hInstance = hInstance;
+	wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 2);
+	wc.lpszMenuName = NULL;
+	wc.lpszClassName = WindowName;
+	wc.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
+
+
+
+
+
+	if (!RegisterClassEx(&wc))
+	{
+		MessageBox(NULL, L"Error registering class", L"Error", MB_OK | MB_ICONERROR);
+		return false;
+	}
+
+
+	hwnd = CreateWindowEx(NULL,
+		WindowName,
+		WindowTitle,
+		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT, CW_USEDEFAULT,
+		width, height,
+		NULL,
+		NULL,
+		hInstance,
+		NULL);
+
+	if (!hwnd)
+	{
+		MessageBox(NULL, L"Error creating window", L"Error", MB_OK | MB_ICONERROR);
+		return false;
+	}
+
+	if (fullscreen)
+	{
+		SetWindowLong(hwnd, GWL_STYLE, 0);
+	}
+
+	ShowWindow(hwnd, ShowWnd);
+	UpdateWindow(hwnd);
+
+	return true;
+	return false;
+}
+
+void RenderApplication::mainloop()
+{
+
+	
+	
+		MSG msg;
+		ZeroMemory(&msg, sizeof(MSG));
+
+
+		while (msg.message != WM_QUIT)
+		{
+			if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+			{
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
+			else {
+				UpdateCameraBuffer();
+				game_time++;
+				instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+					}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f);
+			//	UpdatePerInstanceProperties();
+				Render();
+
+				//Update loop goes here
+			}
+		}
+	
+}
+
+void RenderApplication::UpdatePipeline()
+{
+		HRESULT hr;
 
 	WaitForPreviousFrame();
 
@@ -936,16 +1098,17 @@ void UpdatePipeline() {
 	{
 		Running = false;
 	}
-
 }
-void WaitForPreviousFrame() {
+
+void RenderApplication::WaitForPreviousFrame()
+{
 
 	HRESULT hr;
-	
-	
+
+
 	frameIndex = swapChain->GetCurrentBackBufferIndex();
-	
-	
+
+
 
 	if (fence[frameIndex]->SetEventOnCompletion(fenceValue[frameIndex], fenceEvent))
 	{
@@ -962,8 +1125,9 @@ void WaitForPreviousFrame() {
 
 	fenceValue[frameIndex]++;
 }
-void Cleanup() {
 
+void RenderApplication::Cleanup()
+{
 	tempBool = true;
 	for (int i = 0; i < frameBufferCount; i++)
 	{
@@ -982,7 +1146,7 @@ void Cleanup() {
 	SAFE_RELEASE(commandQueue);
 	SAFE_RELEASE(rtvDescriptorHeap);
 	SAFE_RELEASE(commandList);
-	
+
 
 	for (int i = 0; i < frameBufferCount; ++i)
 	{
@@ -995,12 +1159,8 @@ void Cleanup() {
 	SAFE_RELEASE(vertexBuffer);
 }
 
-
-
-
-
-void Render() {
-
+void RenderApplication::Render()
+{
 	HRESULT hr;
 	UpdatePipeline();
 
@@ -1024,32 +1184,8 @@ void Render() {
 	}
 }
 
-void createDepthBuffer()
-{
-	dsvHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 1,D3D12_DESCRIPTOR_HEAP_TYPE_DSV, false);
 
-	D3D12_HEAP_PROPERTIES depthHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-
-
-	D3D12_RESOURCE_DESC depthResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, Width, Height, 1, 1);
-
-	depthResourceDesc.Flags  |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	CD3DX12_CLEAR_VALUE depthOptimizedClearValue(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
-	ThrowIfFailed(device->CreateCommittedResource(
-		&depthHeapProps, D3D12_HEAP_FLAG_NONE, &depthResourceDesc,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthOptimizedClearValue, IID_PPV_ARGS(&depthBuffer)),L"Unable to create depth buffer resource");
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
-	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
-
-	device->CreateDepthStencilView(depthBuffer.Get(), &dsvDesc,
-		dsvHeap->GetCPUDescriptorHandleForHeapStart());
-}
-
-
-
-void CheckRayTracingSupport()
+void RenderApplication::CheckRaytracingSupport()
 {
 	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = {};
 
@@ -1067,10 +1203,123 @@ void CheckRayTracingSupport()
 	}
 }
 
-
-AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers,std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>,uint32_t>> vIndexBuffers)
+void RenderApplication::CreateRaytracingPipeline()
 {
+	nv_helpers_dx12::RayTracingPipelineGenerator pipeline(device);
 
+
+	rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"RayGen.hlsl");
+	missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Miss.hlsl");
+	hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Hit.hlsl");
+	shadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"ShadowHit.hlsl");
+
+
+
+
+	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen" });
+
+	pipeline.AddLibrary(missLibrary.Get(), { L"Miss" });
+
+	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit",L"PlaneClosestHit" });
+
+	pipeline.AddLibrary(shadowLibrary.Get(), { L"ShadowClosestHit",L"ShadowMiss" });
+
+
+
+
+
+	//RAYGEN
+	rayGenSignature = CreateRayGenSignature();
+	//MISS
+	missSignature = CreateMissSignature();
+	//HIT
+	hitSignature = CreateHitSignature();
+	//ShadowRays
+	shadowHitSignature = CreateHitSignature();
+
+
+	/// <summary>
+	/// 3 different shaders can be executed to obtain intersections
+	///
+	///	an intersection shader is called:
+	///	- when hitting bounding box of geometry
+	///	- any-hit shader
+	///	- closest hit shader invoked on intersection point near ray origin
+	///
+	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
+	/// </summary>
+	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
+	pipeline.AddHitGroup(L"PlaneHitGroup", L"PlaneClosestHit");
+
+
+	//shadows
+	pipeline.AddHitGroup(L"ShadowHitGroup", L"ShadowClosestHit");
+	// Associate rootsignature with corresponding shader
+
+	//
+	//
+
+
+	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), { L"RayGen" });
+
+	pipeline.AddRootSignatureAssociation(shadowHitSignature.Get(), { L"ShadowHitGroup" });
+	pipeline.AddRootSignatureAssociation(missSignature.Get(), { L"Miss",L"ShadowMiss" });
+
+
+	pipeline.AddRootSignatureAssociation(hitSignature.Get(), { L"HitGroup",L"PlaneHitGroup" });
+
+
+
+
+
+
+
+
+
+	pipeline.SetMaxPayloadSize(7 * sizeof(float)); /// RGB + DISTANCE + canReflect + maxdepth + currentdepth
+	pipeline.SetMaxAttributeSize(2 * sizeof(float)); // Barycentric coordinates
+
+
+	// Raytracing can shoot rays from existing points leading to nested TraceRay function calls.
+
+	// Trace Depth: 1 means only primary/initial rays are taken into account
+	// Recursion should be kept to a minimum
+
+	//path tracing algorithms can be flattened into a simple loop in ray generation
+
+	pipeline.SetMaxRecursionDepth(4);
+
+	rtStateObject = pipeline.Generate();
+
+	ThrowIfFailed(rtStateObject->QueryInterface(IID_PPV_ARGS(&rtStateObjectProps)), L"Unable to create raytracing pipeline");
+}
+
+void RenderApplication::CreateRaytracingOutputBuffer()
+{
+	D3D12_RESOURCE_DESC resDesc{ };
+
+	resDesc.DepthOrArraySize = 1;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	/// Backbuffer is actually formatted as DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+	///	sRGB formats like the backbuffer are unable to be used with UAVs,
+	///	for accuracy we convert to sRGB ourselves in the shader
+
+
+	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	resDesc.Width = Width;
+	resDesc.Height = Height;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	resDesc.MipLevels = 1;
+	resDesc.SampleDesc.Count = 1;
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		&nv_helpers_dx12::kDefaultHeapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&outputResource)), L"Unable to create image output buffer");
+
+}
+
+AccelerationStructureBuffers RenderApplication::CreateBottomLevelAS(std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vVertexBuffers, std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, uint32_t>> vIndexBuffers)
+{
 	nv_helpers_dx12::BottomLevelASGenerator bottomLevelAS;
 
 	// add all vertex buffers
@@ -1118,13 +1367,10 @@ AccelerationStructureBuffers CreateBottomLevelAS(std::vector < std::pair<Microso
 
 
 	return buffers;
-
 }
 
-void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly) {
-
-	// INSTANCES IS PAIR OF BLAS AND MATRIX OF THE INSTANCE
-
+void RenderApplication::CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly)
+{
 	if (!updateOnly)
 	{
 		for (size_t i = 0; i < instances.size(); i++)
@@ -1163,17 +1409,15 @@ void CreateTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12R
 		topLevelASBuffers.pResult.Get());
 
 
-
-
 }
 
-void CreateAccelerationStructures()
+void RenderApplication::CreateAccelerationStructures()
 {
 	HRESULT hr;
 
-	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, teapotVertNumber } },{{indexBuffer, teapotIndexNumber}});
+	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, teapotVertNumber } }, { {indexBuffer, teapotIndexNumber} });
 
-	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({{planeBuffer.Get(), 6}},{});
+	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({ {planeBuffer.Get(), 6} }, {});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1.0,0,0)},
@@ -1193,7 +1437,7 @@ void CreateAccelerationStructures()
 	commandQueue->Signal(fence[frameIndex], fenceValue[frameIndex]);
 
 	fence[frameIndex]->SetEventOnCompletion(fenceValue[frameIndex], fenceEvent);
-	
+
 	WaitForSingleObject(fenceEvent, INFINITE);
 
 	hr = commandList->Reset(commandAllocator[frameIndex], pipelineStateObject);
@@ -1207,207 +1451,85 @@ void CreateAccelerationStructures()
 
 
 	bottomLevelAS = bottomLevelBuffers.pResult.Get();
-
 }
 
-ComPtr<ID3D12RootSignature> CreateRayGenSignature()
+ComPtr<ID3D12RootSignature> RenderApplication::CreateRayGenSignature()
 {
-
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
 	rsc.AddHeapRangesParameter(
 		{
 			{
 				0,/* u0*/
-/*
 				1, /*descriptor*/
-			//	0, /*Register space 0*/
-		//		D3D12_DESCRIPTOR_RANGE_TYPE_UAV, /*UAV representing the output buffer*/
-	//			0 /*where UAV is defined */
-//			},
-//		{
-//			0,/*t0*/
-//			1,
-//			0,
-		//	D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*TLAS*/
-		//	1,
-	//	},
-	//	{
-	//	0,
-	//	1,
-	//	0,
-	//	D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-//		2,
-//	//	}
-//		});
+				0, /*Register space 0*/
+				D3D12_DESCRIPTOR_RANGE_TYPE_UAV, /*UAV representing the output buffer*/
+				0 /*where UAV is defined */
+			},
+		{
+			0,/*t0*/
+			1,
+			0,
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV, /*TLAS*/
+			1,
+		},
+		{
+		0,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+		2,
+		}
+		});
 
-//	return rsc.Generate(device, true);
-//}
-/*
-ComPtr<ID3D12RootSignature> CreateHitSignature()
+	return rsc.Generate(device, true);
+}
+
+ComPtr<ID3D12RootSignature> RenderApplication::CreateHitSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-//	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV,0/*t0*///);
-//	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
-//	rsc.AddHeapRangesParameter({{
-//		2 /*t2*/,
-//		1,
-//		0,
-//		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-//		1/*2nd heap slot*/
-//		},
-//		
-//		{
-//			3/*t3*/,
-//		1,
-//		0,
-//		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-//		3
-//		} /* Per Instance Data*/
-//		});
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0/*t0*/);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
+	rsc.AddHeapRangesParameter({ {
+		2 /*t2*/,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		1/*2nd heap slot*/
+		},
+
+		{
+			3/*t3*/,
+		1,
+		0,
+		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		3
+		} /* Per Instance Data*/
+		});
 
 
 
-//	return rsc.Generate(device, true);
-//}
-/*
-ComPtr<ID3D12RootSignature> CreateMissSignature()
+	return rsc.Generate(device, true);
+}
+
+ComPtr<ID3D12RootSignature> RenderApplication::CreateMissSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
 	return rsc.Generate(device, true);
 }
 
-
-void CreateRaytracingPipeline()
+void RenderApplication::CreateShaderResourceheap()
 {
-	nv_helpers_dx12::RayTracingPipelineGenerator pipeline(device);
-
-
-	rayGenLibrary = nv_helpers_dx12::CompileShaderLibrary(L"RayGen.hlsl");
-	missLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Miss.hlsl");
-	hitLibrary = nv_helpers_dx12::CompileShaderLibrary(L"Hit.hlsl");
-	shadowLibrary = nv_helpers_dx12::CompileShaderLibrary(L"ShadowHit.hlsl");
-
-
-
-
-	pipeline.AddLibrary(rayGenLibrary.Get(), { L"RayGen"});
-
-	pipeline.AddLibrary(missLibrary.Get(), { L"Miss"});
-
-	pipeline.AddLibrary(hitLibrary.Get(), { L"ClosestHit",L"PlaneClosestHit"});
-
-	pipeline.AddLibrary(shadowLibrary.Get(),{L"ShadowClosestHit",L"ShadowMiss"});
-
-
-
-
-
-	//RAYGEN
-	rayGenSignature = CreateRayGenSignature();
-	//MISS
-	missSignature = CreateMissSignature();
-	//HIT
-	hitSignature = CreateHitSignature();
-	//ShadowRays
-	shadowHitSignature = CreateHitSignature();
-
-
-	/// <summary>
-	/// 3 different shaders can be executed to obtain intersections
-	///
-	///	an intersection shader is called:
-	///	- when hitting bounding box of geometry
-	///	- any-hit shader
-	///	- closest hit shader invoked on intersection point near ray origin
-	///
-	///	For triangles in DX12 an intersection shader is built in, an empty any-hit shader is defined by default. 
-	/// </summary>
-	pipeline.AddHitGroup(L"HitGroup", L"ClosestHit");
-	pipeline.AddHitGroup(L"PlaneHitGroup", L"PlaneClosestHit");
-
-
-	//shadows
-	pipeline.AddHitGroup(L"ShadowHitGroup",L"ShadowClosestHit");
-	// Associate rootsignature with corresponding shader
-
-	//
-	//
-
-
-	pipeline.AddRootSignatureAssociation(rayGenSignature.Get(), {L"RayGen"});
-
-	pipeline.AddRootSignatureAssociation(shadowHitSignature.Get(), {L"ShadowHitGroup"});
-	pipeline.AddRootSignatureAssociation(missSignature.Get(), {L"Miss",L"ShadowMiss"});
-
-
-	pipeline.AddRootSignatureAssociation(hitSignature.Get(), {L"HitGroup",L"PlaneHitGroup"});
-
-
-
-
-
-
-
-
-
-	pipeline.SetMaxPayloadSize(7 * sizeof(float)); /// RGB + DISTANCE + canReflect + maxdepth + currentdepth
-	pipeline.SetMaxAttributeSize(2 * sizeof(float)); // Barycentric coordinates
-
-
-	// Raytracing can shoot rays from existing points leading to nested TraceRay function calls.
-
-	// Trace Depth: 1 means only primary/initial rays are taken into account
-	// Recursion should be kept to a minimum
-
-	//path tracing algorithms can be flattened into a simple loop in ray generation
-
-	pipeline.SetMaxRecursionDepth(4);
-
-	rtStateObject = pipeline.Generate();
-
-	ThrowIfFailed(rtStateObject->QueryInterface(IID_PPV_ARGS(&rtStateObjectProps)),L"Unable to create raytracing pipeline");
-
-}
-
-
-void CreateRaytracingOutputBuffer()
-{
-	D3D12_RESOURCE_DESC resDesc{ };
-
-	resDesc.DepthOrArraySize = 1;
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	/// Backbuffer is actually formatted as DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-	///	sRGB formats like the backbuffer are unable to be used with UAVs,
-	///	for accuracy we convert to sRGB ourselves in the shader
-
-
-	resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	resDesc.Width = Width;
-	resDesc.Height = Height;
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	resDesc.MipLevels = 1;
-	resDesc.SampleDesc.Count = 1;
-
-	ThrowIfFailed(device->CreateCommittedResource(
-		&nv_helpers_dx12::kDefaultHeapProps, D3D12_HEAP_FLAG_NONE, &resDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&outputResource)),L"Unable to create image output buffer");
-
-
-
-
-}
-void CreateShaderResourceheap()
-{
+	
 	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 4, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
 
-	// The Create X view methods write the view info directly into srvHandle
+		// The Create X view methods write the view info directly into srvHandle
 	UAVDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 
 	device->CreateUnorderedAccessView(outputResource.Get(), nullptr, &UAVDesc, srvHandle);
@@ -1419,44 +1541,46 @@ void CreateShaderResourceheap()
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
 
-	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+		device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
 
-	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 
-	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = cameraBufferSize;
-	device->CreateConstantBufferView(&cbvDesc, srvHandle);
+		cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+		cbvDesc.SizeInBytes = cameraBufferSize;
+		device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
-	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
-	perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
-	perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	perInstanceViewDesc.Buffer.FirstElement = 0;
-	perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
-	perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
-	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+		D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
+		perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+		perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		perInstanceViewDesc.Buffer.FirstElement = 0;
+		perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+		perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+		perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
-	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
+		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 
+	
 }
-void CreateShaderBindingTable()
+
+void RenderApplication::CreateShaderBindingTable()
 {
 	sbtHelper.Reset();
 
 	D3D12_GPU_DESCRIPTOR_HANDLE srvUAVHeapHandle =
 		srvUAVHeap->GetGPUDescriptorHandleForHeapStart();
 
-	auto heapPointer = reinterpret_cast<UINT64 *>(srvUAVHeapHandle.ptr);
+	auto heapPointer = reinterpret_cast<UINT64*>(srvUAVHeapHandle.ptr);
 
 	sbtHelper.AddRayGenerationProgram(L"RayGen", { heapPointer });
 
@@ -1468,277 +1592,33 @@ void CreateShaderBindingTable()
 
 
 
-
-	for (int i = 0; i < instances.size()-1; i++)
+	/// <summary>
+	/// TODO: Create a ResourceManager that handles GPU Resources, then use identifiers to hash into a container and get the required resources for each model
+	/// </summary>
+	for (int i = 0; i < instances.size() - 1; i++)
 	{
-		sbtHelper.AddHitGroup(L"HitGroup",{(void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress()});
+		sbtHelper.AddHitGroup(L"HitGroup", { (void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress() });
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 
-	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,heapPointer});
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,heapPointer });
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	// add triangle shader
 //	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
 
 
-	
-	
+
+
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
 
 	sbtStorage = nv_helpers_dx12::CreateBuffer(device, sbtSize, D3D12_RESOURCE_FLAG_NONE,
-	                                           D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+		D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
 
-	if(!sbtStorage)
+	if (!sbtStorage)
 	{
 		throw std::logic_error("Could not allocate the shader binding table");
 	}
 
 	sbtHelper.Generate(sbtStorage.Get(), rtStateObjectProps.Get());
-
 }
-void CreateCameraBuffer()
-{
-
-
-	uint32_t nbMatrix = 4; // View, Perspective, View inv, Perspective inv
-
-	cameraBufferSize = nbMatrix * sizeof(DirectX::XMMATRIX);
-	cameraBuffer = nv_helpers_dx12::CreateBuffer(device, cameraBufferSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
-
-
-	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
-	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
-	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
-	);
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-
-	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
-	cbvDesc.SizeInBytes = cameraBufferSize;
-https://noclip.website/#sms/dolpic1;ShareData=AR*;X96ep[UKbtd9s[yH=d^|aQwXUtUv04rUL&gbWeCOdUt|6_UQjIW9ju:K=2
-	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = constHeap->GetCPUDescriptorHandleForHeapStart();
-
-	device->CreateConstantBufferView(&cbvDesc, srvHandle);
-
-
-
-	// TODO: Move creation of PerInstanceProperties view out of this function
-	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	srvDesc.Buffer.FirstElement = 0;
-	srvDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
-	srvDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
-	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-	
-
-	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);
-
-
-}
-void UpdateCameraBuffer()
-{
-	/*std::vector<DirectX::XMMATRIX> matrices(4);
-
-	// init view matrix
-
-	DirectX::XMVECTOR cameraEye = DirectX::XMVectorSet(1.5f, 1.5f, 1.5f, 0.0f);
-
-	DirectX::XMVECTOR At = DirectX::XMVectorSet(0.0f,0.0f,0.0f,0.0f);
-
-	DirectX::XMVECTOR Up = DirectX::XMVectorSet(0.0, 1.0f, 0.0f, 0.0f);
-
-	matrices[0] = DirectX::XMMatrixLookAtRH(cameraEye, At, Up);
-
-	float fovAngleY = 45.0f * DirectX::XM_PI / 180.0f;
-
-	float aspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
-
-	matrices[1] = DirectX::XMMatrixPerspectiveFovRH(fovAngleY,aspectRatio, 0.1f, 1000.0f);
-
-
-	// RAYS ARE DEFINED IN CAMERA SPACE AND TRANSFORMED TO WORLD SPACE
-	// WE NEED TO STORE INVERSE MATRICES
-
-	DirectX::XMVECTOR det;
-
-	matrices[2] = DirectX::XMMatrixInverse(&det, matrices[0]);
-	matrices[3] = DirectX::XMMatrixInverse(&det, matrices[1]);*/
-	//cameraController.UpdateCamera(Width, Height);
-/*
-	auto matrices = cameraController.GetCameraData(Width, Height);
-
-	std::uint8_t* pdata;
-
-	ThrowIfFailed(cameraBuffer->Map(0, nullptr, (void**)&pdata), L"Failed to map camera buffer");
-
-	memcpy(pdata, matrices.data(), cameraBufferSize);
-
-	cameraBuffer->Unmap(0, nullptr);
-}
-void CreateGlobalConstantBuffer()
-{
-	DirectX::XMVECTOR bufferData[] =
-	{
-	DirectX::XMVECTOR{1.0f, 0.0f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.7f, 0.4f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.4f, 0.7f, 0.0f, 1.0f},
-
-	// B
-	DirectX::XMVECTOR{0.0f, 1.0f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.0f, 0.7f, 0.4f, 1.0f},
-	DirectX::XMVECTOR{0.0f, 0.4f, 0.7f, 1.0f},
-
-	// C
-	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
-	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
-	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
-
-
-	};
-
-	globalConstBuffer = nv_helpers_dx12::CreateBuffer(
-		device,
-		sizeof(bufferData),
-		D3D12_RESOURCE_FLAG_NONE,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		nv_helpers_dx12::kUploadHeapProps
-		);
-
-	uint8_t* pData;
-
-	ThrowIfFailed(globalConstBuffer->Map(0, nullptr, (void**)&pData),L"Unable to create global const buffer");
-	memcpy(pData, bufferData, sizeof(bufferData));
-	globalConstBuffer->Unmap(0, nullptr);
-}
-void CreatePerInstanceBuffer()
-{
-	DirectX::XMVECTOR bufferData[] =
-	{
-	DirectX::XMVECTOR{1.0f, 0.0f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.7f, 0.4f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.4f, 0.7f, 0.0f, 1.0f},
-
-	// B
-	DirectX::XMVECTOR{0.0f, 1.0f, 0.0f, 1.0f},
-	DirectX::XMVECTOR{0.0f, 0.7f, 0.4f, 1.0f},
-	DirectX::XMVECTOR{0.0f, 0.4f, 0.7f, 1.0f},
-
-	// C
-	DirectX::XMVECTOR{0.0f, 0.0f, 1.0f, 1.0f},
-	DirectX::XMVECTOR{0.4f, 0.0f, 0.7f, 1.0f},
-	DirectX::XMVECTOR{0.7f, 0.0f, 0.4f, 1.0f},
-	};
-
-
-
-	
-	perInstanceConstantBuffers.resize(3);
-
-	int i(0);
-	for (auto& buffer : perInstanceConstantBuffers)
-	{
-		const uint32_t bufferSize = sizeof(DirectX::XMVECTOR) * 3;
-		buffer = nv_helpers_dx12::CreateBuffer(device, bufferSize, D3D12_RESOURCE_FLAG_NONE,
-			D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
-
-		uint8_t* pData;
-
-		ThrowIfFailed(buffer->Map(0, nullptr, (void**)&pData), L"Unable to load per instance constant buffer");
-		memcpy(pData, &bufferData[i * 3], bufferSize);
-		buffer->Unmap(0, nullptr);
-		i++;
-	}
-
-}
-void CreatePlaneVB()
-{
-	
-	Vertex planeVertices[] = {
-	 {-1.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 0
-	 {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
-	 {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
-	 {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
-	 {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
-	 {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}  // 4
-	};
-
-	const UINT planeBufferSize= sizeof(planeVertices);
-
-	///Todo: USING UPLOAD HEAPS FOR VBO IS NOT A GOOD IDEA. Why?
-	/// - The upload heap will be marshalled over every time the GPU needs it
-	///The upload heap is used here for temporary code simplicity
-	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	/// READ UP ON DEFAULT HEAP USAGE
-	/// 
-	CD3DX12_HEAP_PROPERTIES heapProperty = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-
-	CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(planeBufferSize);
-
-	ThrowIfFailed(device->CreateCommittedResource(&heapProperty, D3D12_HEAP_FLAG_NONE, &bufferResource, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&planeBuffer)),L"Unable to create Plane VBO");
-
-	UINT8 *pVertexDatabegin;
-	CD3DX12_RANGE readRange(0, 0);
-
-	ThrowIfFailed(planeBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDatabegin)),L"Unable to create plane vertex buffer");
-
-	memcpy(pVertexDatabegin, planeVertices, sizeof(planeVertices));
-
-	planeBuffer->Unmap(0, nullptr);
-
-	planeBufferview.BufferLocation = planeBuffer->GetGPUVirtualAddress();
-	planeBufferview.StrideInBytes = sizeof(Vertex);
-	planeBufferview.SizeInBytes = planeBufferSize;
-
-}
-void OnKeyUp(UINT8 key)
-{
-	if (key == VK_UP)
-	{
-		m_raster = !m_raster;
-	}
-	if (key == VK_DOWN)
-	{
-		cameraController.MoveForward();
-	}
-}
-
-
-
-void CreatePerInstancePropertiesBuffer()
-{
-	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size()) * sizeof(PerInstanceProperties), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-
-	perInstancePropertiesBuffer = nv_helpers_dx12::CreateBuffer(device, buffersize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
-
-
-}
-
-void UpdatePerInstanceProperties()
-{
-
-	PerInstanceProperties* current = nullptr;
-	CD3DX12_RANGE readRange(0, 0);
-	ThrowIfFailed(perInstancePropertiesBuffer->Map(0, &readRange, reinterpret_cast<void**>(&current)), L"Unable to map instance properties");
-	for (const auto& instance : instances)
-	{
-		current->objectToWorld = instance.second;
-		DirectX::XMMATRIX upper3x3 = instance.second;
-		upper3x3.r[0].m128_f32[3] = 0.f;
-		upper3x3.r[1].m128_f32[3] = 0.f;
-		upper3x3.r[2].m128_f32[3] = 0.f;
-		upper3x3.r[3].m128_f32[0] = 0.f;
-		upper3x3.r[3].m128_f32[1] = 0.f;
-		upper3x3.r[3].m128_f32[2] = 0.f;
-		upper3x3.r[3].m128_f32[3] = 1.f;
-		DirectX::XMVECTOR det;
-		current->objectToWorldNormal = XMMatrixTranspose(XMMatrixInverse(&det, upper3x3));
-		current++;
-	}
-	perInstancePropertiesBuffer->Unmap(0, nullptr);
-}*/

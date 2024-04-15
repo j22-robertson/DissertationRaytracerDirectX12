@@ -146,6 +146,7 @@
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DXRHelper.h" />
     <ClInclude Include="RaytracingPipelineGenerator.h" />
+    <ClInclude Include="RenderApplication.h" />
     <ClInclude Include="RootSignatureGenerator.h" />
     <ClInclude Include="ShaderBindingTableGenerator.h" />
     <ClInclude Include="stdafx.h" />
@@ -157,6 +158,7 @@
     <ClCompile Include="CameraController.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="RaytracingPipelineGenerator.cpp" />
+    <ClCompile Include="RenderApplication.cpp" />
     <ClCompile Include="RootSignatureGenerator.cpp" />
     <ClCompile Include="ShaderBindingTableGenerator.cpp" />
     <ClCompile Include="TopLevelASGenerator.cpp" />
