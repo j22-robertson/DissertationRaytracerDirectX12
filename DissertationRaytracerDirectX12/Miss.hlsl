@@ -1,5 +1,11 @@
 #include "Common.hlsl"
 
+cbuffer BackgroundColor : register(b0)
+{
+    float3 col;
+    float padding;
+}
+
 [shader("miss")]
 void Miss(inout HitInfo payload : SV_RayPayload)
 {
@@ -11,5 +17,5 @@ void Miss(inout HitInfo payload : SV_RayPayload)
 
 
 
-    payload.colorAndDistance = float4(0.0f, 0.2f, 0.7f - 0.3f * ramp, -1.f);
+    payload.colorAndDistance = float4(col.x, 0.2f, 0.7f - 0.3f * ramp, -1.f);
 }

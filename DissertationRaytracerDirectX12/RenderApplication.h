@@ -1,6 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include "tiny_obj_loader.h"
+#include "Imgui/imgui.h"
 
 
 struct ApplicationSettings
@@ -22,6 +23,55 @@ struct AccelerationStructureBuffers
 };
 
 
+class App
+{
+public:
+	virtual void OnKeyUp(UINT8 key) = 0;
+};
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+inline LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+auto app = 	reinterpret_cast<App*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
+	//App *app = reinterpret_cast<App*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+return true;
+	switch (msg)
+	{
+	case WM_CREATE:
+		{
+		LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
+		return 0;
+		}
+	case WM_KEYUP:
+	{
+		app->OnKeyUp(static_cast<UINT8>(wParam));
+		//OnKeyUp(static_cast<UINT8>(wParam));
+
+
+		return 0;
+	}
+	case WM_KEYDOWN:
+	{
+		if (wParam == VK_ESCAPE) {
+			if (MessageBox(0, L"Are you sure you want to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
+				DestroyWindow(hWnd);
+		}
+		return 0;
+	}
+	case WM_DESTROY:
+	{
+		PostQuitMessage(0);
+		return 0;
+	}
+
+	}
+	return DefWindowProc(hWnd, msg, wParam, lParam);
+
+}
+
 
 struct Vertex {
 	Vertex(float x, float y, float z, float r, float g, float b, float a) : pos(x, y, z), color(r, g, b, a) {}
@@ -29,7 +79,10 @@ struct Vertex {
 	DirectX::XMFLOAT4 color;
 };
 
-class RenderApplication
+
+
+
+class RenderApplication : App
 {
 
 
@@ -37,7 +90,7 @@ class RenderApplication
 public:
 	~RenderApplication()
 	{
-		Cleanup();
+	//	Cleanup();
 	}
 //** SHOULD NOT BE PUBLIC, CHANGE**//
 	UINT teapotVertNumber;
@@ -47,8 +100,8 @@ public:
 	tinyobj::ObjReaderConfig reader_config;
 	tinyobj::ObjReader reader;
 
-
-static	LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void OnKeyUp(UINT8 key) override;
+//	LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 int setup(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen);
@@ -85,6 +138,7 @@ private:
 	 */
 	void createDepthBuffer();
 	void CreatePerInstanceBuffer();
+	void createBackgroundBuffer();
 
 
 
@@ -96,7 +150,7 @@ private:
 	void CreateCameraBuffer();
 	void UpdateCameraBuffer();
 
-static	void OnKeyUp(UINT8 key);
+
 	
 	void CreatePlaneVB(); 
 
@@ -236,16 +290,21 @@ private:
 	ComPtr<ID3D12Resource> planeBuffer;
 
 	ComPtr<ID3D12Resource> indexBuffer;
-
+	ComPtr<ID3D12Resource> backgroundColor;
 	D3D12_INDEX_BUFFER_VIEW indexBufferView;
 
 	D3D12_VERTEX_BUFFER_VIEW planeBufferview;
-	 bool m_raster = false;
+	bool m_raster = true;
 
 
+	//ComPtr<ID3D12DescriptorHeap> BackgroundHeap;
+
+
+	//TODO: Remove temp rotspeed variable
+	float rotspeed = 50.0;
 	std::uint32_t game_time;
 
 	ComPtr<ID3D12Resource> perInstancePropertiesBuffer;
-
+	DirectX::XMVECTOR bgcol;
 };
 

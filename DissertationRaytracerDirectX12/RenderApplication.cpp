@@ -5,8 +5,12 @@
 #include "RaytracingPipelineGenerator.h"
 #include "RootSignatureGenerator.h"
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+#include <functional>
 
+#include "tiny_obj_loader.h"
+#include "Imgui/imgui.h"
+#include "Imgui/imgui_impl_win32.h"
+#include "Imgui/imgui_impl_dx12.h"
 
 void RenderApplication::createDepthBuffer()
 {
@@ -43,9 +47,9 @@ void RenderApplication::CreateCameraBuffer()
 	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
 	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
 	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		device, 2, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
+		device, 3, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
 	);
-
+//	UpdateCameraBuffer();
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 
 	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
@@ -71,6 +75,14 @@ void RenderApplication::CreateCameraBuffer()
 
 
 	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	ImGui_ImplDX12_Init(device, 3, DXGI_FORMAT_R8G8B8A8_UNORM,
+		constHeap.Get(),
+		// You'll need to designate a descriptor from your descriptor heap for Dear ImGui to use internally for its font texture's SRV
+		constHeap->GetCPUDescriptorHandleForHeapStart(),
+		constHeap->GetGPUDescriptorHandleForHeapStart());
+
 
 }
 
@@ -91,11 +103,11 @@ void RenderApplication::OnKeyUp(UINT8 key)
 {
 	if (key == VK_UP)
 	{
-	//	m_raster = !m_raster;
+		m_raster =!m_raster;
 	}
 	if (key == VK_DOWN)
 	{
-	//	cameraController.MoveForward();
+		cameraController.MoveForward();
 	}
 }
 
@@ -178,8 +190,31 @@ void RenderApplication::CreatePerInstanceBuffer()
 	}
 }
 
+void RenderApplication::createBackgroundBuffer()
+{
+//	device->CreateCommittedResource(CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, &backgroundColddor)
+	
+	backgroundColor = nv_helpers_dx12::CreateBuffer(device, sizeof(DirectX::XMVECTOR), D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+
+	 bgcol = { (float)0.9,(float)0.1,(float)0.1,0.0 };
+
+
+	 std::vector<float> mybgcol = { 0.5,0.5,0.1,0.0 };
+	 CD3DX12_RANGE readRange(0, 0);
+//
+	std::uint8_t* bgdata;
+//
+	ThrowIfFailed(backgroundColor->Map(0,&readRange, (void**)&bgdata), L"Failed to map background buffer");
+
+	memcpy(bgdata,mybgcol.data(), sizeof(DirectX::XMVECTOR));
+
+	backgroundColor->Unmap(0, nullptr);
+
+}
+
 void RenderApplication::CreatePerInstancePropertiesBuffer()
 {
+
 	std::uint32_t buffersize = ROUND_UP(static_cast<std::uint32_t>(instances.size()) * sizeof(PerInstanceProperties), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 
 	perInstancePropertiesBuffer = nv_helpers_dx12::CreateBuffer(device, buffersize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
@@ -748,7 +783,8 @@ bool RenderApplication::InitD3D()
 
 	//CreatePlaneVB();
 
-	//CheckRayTracingSupport();
+	CheckRaytracingSupport();
+
 
 	CreateAccelerationStructures();
 
@@ -757,7 +793,7 @@ bool RenderApplication::InitD3D()
 
 	CreatePerInstancePropertiesBuffer();
 	CreateCameraBuffer();
-
+	createBackgroundBuffer();
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
@@ -811,37 +847,14 @@ bool RenderApplication::InitD3D()
 }
 
 
-LRESULT CALLBACK RenderApplication::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	switch (msg)
-	{
-	case WM_KEYUP:
-	{
-		OnKeyUp(static_cast<UINT8>(wParam));
 
-		return 0;
-	}
-	case WM_KEYDOWN:
-	{
-		if (wParam == VK_ESCAPE) {
-			if (MessageBox(0, L"Are you sure you want to exit?", L"Confirm, do you want to exit program?", MB_YESNO | MB_ICONQUESTION) == IDYES)
-				DestroyWindow(hWnd);
-		}
-		return 0;
-	}
-	case WM_DESTROY:
-	{
-		PostQuitMessage(0);
-		return 0;
-	}
-
-	}
-	return DefWindowProc(hWnd, msg, wParam, lParam);
-
-}
 
 int RenderApplication::setup(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen)
 {
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	if (!InitializeWindow(hInstance, ShowWnd, Width, Height, FullScreen))
 	{
 		MessageBox(0, L"Window Initializaiton - Failed", L"Error", MB_OK);
@@ -854,10 +867,22 @@ int RenderApplication::setup(HINSTANCE hInstance, int ShowWnd, int width, int he
 		Cleanup();
 		return 2;
 	}
+
+
+	// Setup Dear ImGui context
+  // Enable Keyboard Controls
+//	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+//	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // IF using Docking Branch
+
+	// Setup Platform/Renderer backends
+
+
+
 	mainloop();
 
 	WaitForPreviousFrame();
 	CloseHandle(fenceEvent);
+	Cleanup();
 
 	//Cleanup();
 //	InitializeWindow(hInstance, ShowWnd, width, height, fullscreen);
@@ -918,7 +943,7 @@ bool RenderApplication::InitializeWindow(HINSTANCE hInstance, int ShowWnd, int w
 		NULL,
 		NULL,
 		hInstance,
-		NULL);
+		this);
 
 	if (!hwnd)
 	{
@@ -934,8 +959,10 @@ bool RenderApplication::InitializeWindow(HINSTANCE hInstance, int ShowWnd, int w
 	ShowWindow(hwnd, ShowWnd);
 	UpdateWindow(hwnd);
 
+	ImGui_ImplWin32_Init(hwnd);
+
 	return true;
-	return false;
+	//return false;
 }
 
 void RenderApplication::mainloop()
@@ -954,12 +981,20 @@ void RenderApplication::mainloop()
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 			}
-			else {
+			 {
+
+				ImGui_ImplDX12_NewFrame();
+				ImGui_ImplWin32_NewFrame();
+				ImGui::NewFrame();
+			//	ImGui::ShowDemoWindow();
 				UpdateCameraBuffer();
+				ImGui::Begin("RotationSpeed");
+				ImGui::SliderFloat("Speed", &rotspeed,0.0,100.0);
+				ImGui::End();
 				game_time++;
 				instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
-					}, static_cast<float>(game_time) / 50.0f) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f);
-			//	UpdatePerInstanceProperties();
+					}, static_cast<float>(game_time) / rotspeed) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f);
+				UpdatePerInstancePropertiesBuffer();
 				Render();
 
 				//Update loop goes here
@@ -995,13 +1030,18 @@ void RenderApplication::UpdatePipeline()
 
 	///TODO: fix l-value for rb and rb2
 
+		ImGui::Render();
 	auto rb = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	commandList->ResourceBarrier(1, &rb);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameIndex, rtvDescriptorSize);
+	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
+	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(dsvHeap->GetCPUDescriptorHandleForHeapStart());
 	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+
+	
 
 	if (m_raster)
 	{
@@ -1011,8 +1051,8 @@ void RenderApplication::UpdatePipeline()
 		commandList->SetGraphicsRootDescriptorTable(
 			0, constHeap->GetGPUDescriptorHandleForHeapStart());
 
-		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	
+
 
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -1028,13 +1068,16 @@ void RenderApplication::UpdatePipeline()
 
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
-
+	//	ImGui::Render();
+	//	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList;
+	
 	}
 	else {
 
 		CreateTopLevelAS(instances, true);
+		const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 	//	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-	//	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
@@ -1087,6 +1130,13 @@ void RenderApplication::UpdatePipeline()
 
 	}
 
+	//TODO: Research how to handle imgui with raytracing (This works and seems correct though, simply switching our descriptor heap for rasterizing our imgui window)
+	std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
+	commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
+	commandList->SetGraphicsRootDescriptorTable(
+		0, constHeap->GetGPUDescriptorHandleForHeapStart());
+//	ImGui::Render();
+	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 
 
 	auto rb2 = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -1157,13 +1207,17 @@ void RenderApplication::Cleanup()
 	SAFE_RELEASE(pipelineStateObject);
 	SAFE_RELEASE(rootSignature);
 	SAFE_RELEASE(vertexBuffer);
+	ImGui_ImplDX12_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
 }
 
 void RenderApplication::Render()
 {
 	HRESULT hr;
 	UpdatePipeline();
-
+//	ImGui::Render();
+///	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
 	ID3D12CommandList* ppCommandLists[] = { commandList };
 
 
@@ -1478,7 +1532,7 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateRayGenSignature()
 		1,
 		0,
 		D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-		2,
+		2,//camera
 		}
 		});
 
@@ -1491,22 +1545,25 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateHitSignature()
 
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0/*t0*/);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
-	rsc.AddHeapRangesParameter({ {
-		2 /*t2*/,
-		1,
-		0,
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		1/*2nd heap slot*/
-		},
-
+	rsc.AddHeapRangesParameter(
 		{
-			3/*t3*/,
-		1,
-		0,
-		D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-		3
-		} /* Per Instance Data*/
-		});
+			{
+				2 /*t2*/,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				1/*2nd heap slot*/
+			},
+			{
+				3/*t3*/,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				3 /*4th heap slot*/
+			} /* Per Instance Data*/
+		}
+	);
+
 
 
 
@@ -1517,13 +1574,15 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateMissSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV,0);
+		//TODO: Finish binding data to miss shader
 	return rsc.Generate(device, true);
 }
 
 void RenderApplication::CreateShaderResourceheap()
 {
-	
-	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 4, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 5, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
 
@@ -1567,9 +1626,16 @@ void RenderApplication::CreateShaderResourceheap()
 		perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
 		device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
+
 		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+	//	D3D12_CONSTANT_BUFFER_VIEW_DESC bgDesc = {};
+	//	bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
+	//	bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR);
 
+	//	device->CreateConstantBufferView(&bgDesc, srvHandle);
+	
+	//	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	
 }
 
@@ -1585,7 +1651,7 @@ void RenderApplication::CreateShaderBindingTable()
 	sbtHelper.AddRayGenerationProgram(L"RayGen", { heapPointer });
 
 	// Miss and hit shaders do not access external resources, they communicate results through the ray payload instead.
-	sbtHelper.AddMissProgram(L"Miss", {});
+	sbtHelper.AddMissProgram(L"Miss", {(void*)backgroundColor->GetGPUVirtualAddress()});
 	sbtHelper.AddMissProgram(L"ShadowMiss", {});
 
 
@@ -1593,15 +1659,15 @@ void RenderApplication::CreateShaderBindingTable()
 
 
 	/// <summary>
-	/// TODO: Create a ResourceManager that handles GPU Resources, then use identifiers to hash into a container and get the required resources for each model
+	/// TODO: Create a ResourceManager that handles GPU Resources, then use identifiers to hash into a container`and get the required resources for each model
 	/// </summary>
 	for (int i = 0; i < instances.size() - 1; i++)
 	{
-		sbtHelper.AddHitGroup(L"HitGroup", { (void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress() });
+		sbtHelper.AddHitGroup(L"HitGroup", { (void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress()/*(void*)materialproperties->GetGPUVA*/});
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 
-	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(), nullptr,heapPointer });
+	sbtHelper.AddHitGroup(L"PlaneHitGroup", { (void*)planeBuffer->GetGPUVirtualAddress(),});
 	sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	// add triangle shader
 //	sbtHelper.AddHitGroup(L"HitGroup", {(void*)(vertexBuffer->GetGPUVirtualAddress()),(void*)(indexBuffer->GetGPUVirtualAddress()),(void*)globalConstBuffer->GetGPUVirtualAddress()});
@@ -1611,6 +1677,9 @@ void RenderApplication::CreateShaderBindingTable()
 
 
 	uint32_t sbtSize = sbtHelper.ComputeSBTSize();
+
+
+
 
 	sbtStorage = nv_helpers_dx12::CreateBuffer(device, sbtSize, D3D12_RESOURCE_FLAG_NONE,
 		D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
