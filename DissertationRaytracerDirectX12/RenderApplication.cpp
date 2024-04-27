@@ -212,6 +212,21 @@ void RenderApplication::createBackgroundBuffer()
 
 }
 
+void RenderApplication::UpdateBackgroundBuffer()
+{
+	CD3DX12_RANGE readRange(0, 0);
+	//
+	
+	std::uint8_t* bgdata;
+	//
+	ThrowIfFailed(backgroundColor->Map(0, &readRange, (void**)&bgdata), L"Failed to map background buffer");
+
+	memcpy(bgdata, &bgcolour, sizeof(DirectX::XMVECTOR));
+
+	backgroundColor->Unmap(0, nullptr);
+
+}
+
 void RenderApplication::CreatePerInstancePropertiesBuffer()
 {
 
@@ -991,6 +1006,10 @@ void RenderApplication::mainloop()
 				ImGui::Begin("RotationSpeed");
 				ImGui::SliderFloat("Speed", &rotspeed,0.0,100.0);
 				ImGui::End();
+				ImGui::Begin("Colours");
+				ImGui::SliderFloat4( "RGB",bgcolour.m128_f32, 0.0, 1.0);
+				ImGui::End();
+				UpdateBackgroundBuffer();
 				game_time++;
 				instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
 					}, static_cast<float>(game_time) / rotspeed) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f);

@@ -132,13 +132,14 @@ private:
 	void CreateShaderResourceheap();
 	void CreateShaderBindingTable();
 
-	
+	DirectX::XMVECTOR bgcolour;
 	/*
 	 *
 	 */
 	void createDepthBuffer();
 	void CreatePerInstanceBuffer();
 	void createBackgroundBuffer();
+	void UpdateBackgroundBuffer();
 
 
 
