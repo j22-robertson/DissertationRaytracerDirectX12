@@ -2,8 +2,9 @@
 #include "stdafx.h"
 #include "tiny_obj_loader.h"
 #include "Imgui/imgui.h"
+#include <DirectXTex.h>
 
-
+//#define D3DCOMPILE_DEBUG
 struct ApplicationSettings
 {
 	int height;
@@ -41,6 +42,7 @@ return true;
 	{
 	case WM_CREATE:
 		{
+	//	DirectX::CreateTexture();
 		LPCREATESTRUCT pCreateStruct = reinterpret_cast<LPCREATESTRUCT>(lParam);
 		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pCreateStruct->lpCreateParams));
 		return 0;
@@ -84,9 +86,7 @@ struct Vertex {
 
 class RenderApplication : App
 {
-
-
-
+	
 public:
 	~RenderApplication()
 	{
@@ -117,7 +117,7 @@ private:
 	
 	void CreateRaytracingOutputBuffer();
 
-
+	ComPtr<ID3D12Resource> env_texture;
 
 
 
@@ -129,8 +129,11 @@ private:
 	ComPtr<ID3D12RootSignature> CreateHitSignature();
 	ComPtr<ID3D12RootSignature> CreateMissSignature();
 
+	void CreateEnvmapResourceHeap();
+
 	void CreateShaderResourceheap();
 	void CreateShaderBindingTable();
+	
 
 	DirectX::XMVECTOR bgcolour;
 	/*
@@ -140,6 +143,13 @@ private:
 	void CreatePerInstanceBuffer();
 	void createBackgroundBuffer();
 	void UpdateBackgroundBuffer();
+
+	void LoadEnvironmentMap(const wchar_t* filename);
+	DirectX::TexMetadata data;
+	std::unique_ptr<DirectX::ScratchImage> image;
+
+	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+	void LoadTextureFromFile(const wchar_t* filename);
 
 
 
@@ -185,6 +195,7 @@ private:
 	LPCTSTR WindowName = L"Raytracer";
 
 	//Window title
+	ComPtr<ID3D12Debug> debugController;
 
 	LPCTSTR WindowTitle = L"Raytracer";
 
@@ -244,6 +255,7 @@ private:
 	nv_helpers_dx12::TopLevelASGenerator topLevelASGenerator;
 
 
+	ComPtr<ID3D12Resource> textureUploadHeap;
 
 
 	AccelerationStructureBuffers topLevelASBuffers;
@@ -263,6 +275,7 @@ private:
 	ComPtr<ID3D12DescriptorHeap> dsvHeap;
 	ComPtr<ID3D12Resource> depthBuffer;
 
+	ComPtr<ID3D12DescriptorHeap> envmapHeap;
 
 	nv_helpers_dx12::ShaderBindingTableGenerator sbtHelper;
 	ComPtr<ID3D12Resource> sbtStorage;
@@ -297,8 +310,6 @@ private:
 	D3D12_VERTEX_BUFFER_VIEW planeBufferview;
 	bool m_raster = true;
 
-
-	//ComPtr<ID3D12DescriptorHeap> BackgroundHeap;
 
 
 	//TODO: Remove temp rotspeed variable

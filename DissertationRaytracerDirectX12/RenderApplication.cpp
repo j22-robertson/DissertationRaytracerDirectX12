@@ -18,7 +18,7 @@ void RenderApplication::createDepthBuffer()
 
 	D3D12_HEAP_PROPERTIES depthHeapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
-
+//	DirectX::LoadFromDDSFile()
 	D3D12_RESOURCE_DESC depthResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, Width, Height, 1, 1);
 
 	depthResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
@@ -49,7 +49,6 @@ void RenderApplication::CreateCameraBuffer()
 	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
 		device, 3, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
 	);
-//	UpdateCameraBuffer();
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 
 	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
@@ -58,7 +57,6 @@ void RenderApplication::CreateCameraBuffer()
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = constHeap->GetCPUDescriptorHandleForHeapStart();
 
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
-
 
 
 	// TODO: Move creation of PerInstanceProperties view out of this function
@@ -227,6 +225,61 @@ void RenderApplication::UpdateBackgroundBuffer()
 
 }
 
+void RenderApplication::LoadEnvironmentMap(const wchar_t* filename)
+{
+
+//	data->
+	image = std::make_unique<DirectX::ScratchImage>();
+	
+
+	//ToDo: Handle error
+	ThrowIfFailed(DirectX::LoadFromHDRFile(L"cobblestone_street_night_2k.hdr", nullptr, *image), L"Unable to read metadata from " + *filename);
+
+	ThrowIfFailed(DirectX::CreateTexture(device,image->GetMetadata(), &env_texture),L"Unable to load texture "+ *filename);
+
+	DirectX::PrepareUpload(device, image->GetImages(), image->GetImageCount(), image->GetMetadata(), subresources);
+	const UINT64 env_buffsize = GetRequiredIntermediateSize(env_texture.Get(), 0, static_cast<unsigned int>(subresources.size()));
+
+	auto heapprops = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	auto buffdesc = CD3DX12_RESOURCE_DESC::Buffer(env_buffsize);
+
+
+	ThrowIfFailed( device->CreateCommittedResource(
+		&heapprops,
+		D3D12_HEAP_FLAG_NONE,
+	&buffdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(textureUploadHeap.GetAddressOf())),L"Unable to create committed memory for envmap");
+
+
+	UpdateSubresources(commandList, env_texture.Get(), textureUploadHeap.Get(), 0, 0, static_cast<unsigned int>(subresources.size()),subresources.data());
+
+
+	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(env_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+	
+	env_texture->SetName(L"Environment Map");
+
+
+}
+
+void RenderApplication::LoadTextureFromFile(const wchar_t* filename)
+{
+
+	/*
+	DirectX::TexMetadata* data = nullptr;
+
+	//ToDo: Handle error
+	DirectX::LoadFromDDSFile(filename, DirectX::DDS_FLAGS_NONE, data, *image.Get());
+
+	ComPtr<ID3D12Resource> texture;
+	DirectX::CreateTexture(device, *data, &texture);*/
+
+	
+
+}
+
 void RenderApplication::CreatePerInstancePropertiesBuffer()
 {
 
@@ -315,6 +368,10 @@ bool RenderApplication::InitD3D()
 	}
 
 
+
+
+
+
 	D3D12_COMMAND_QUEUE_DESC commandQueueDesc = {};
 
 	commandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -322,6 +379,8 @@ bool RenderApplication::InitD3D()
 
 
 	hr = device->CreateCommandQueue(&commandQueueDesc, IID_PPV_ARGS(&commandQueue));
+
+
 
 	if (FAILED(hr))
 	{
@@ -519,7 +578,8 @@ bool RenderApplication::InitD3D()
 		OutputDebugStringA((char*)errorBuff->GetBufferPointer());
 		return false;
 	}
-
+	
+	
 	D3D12_SHADER_BYTECODE pixelShaderBytecode = {};
 
 	pixelShaderBytecode.BytecodeLength = pixelShader->GetBufferSize();
@@ -762,7 +822,7 @@ bool RenderApplication::InitD3D()
 		&vertexData);
 
 	//FIX LVALUE
-	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(vertexBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(vertexBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 
 
@@ -809,6 +869,8 @@ bool RenderApplication::InitD3D()
 	CreatePerInstancePropertiesBuffer();
 	CreateCameraBuffer();
 	createBackgroundBuffer();
+
+	LoadEnvironmentMap(L"cobblestone_street_night_2k.hdr");
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
 	CreateRaytracingOutputBuffer();
 
@@ -819,12 +881,11 @@ bool RenderApplication::InitD3D()
 	// Create the buffer containing the results of RayTracing (always output in a UAV), and create the heap referencing the resources used by the RayTracing e.g. acceleration structures
 	CreateShaderResourceheap();
 
-	CreateShaderBindingTable();
 	commandList->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { commandList };
 	commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
+	CreateShaderBindingTable();
 	//Increment fence otheriwse buffer may not be uploaded by draw time
 	fenceValue[frameIndex]++;
 
@@ -875,6 +936,12 @@ int RenderApplication::setup(HINSTANCE hInstance, int ShowWnd, int width, int he
 		MessageBox(0, L"Window Initializaiton - Failed", L"Error", MB_OK);
 		return 1;
 	}
+	
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
+	{
+		debugController->EnableDebugLayer();
+	}
+
 	if (!InitD3D())
 	{
 		MessageBox(0, L"Failed to initialize DX12", L"Error", MB_OK);
@@ -1028,12 +1095,12 @@ void RenderApplication::UpdatePipeline()
 
 	WaitForPreviousFrame();
 
-	hr = commandAllocator[frameIndex]->Reset();
+//	hr = commandAllocator[frameIndex]->Reset();
 
-	if (FAILED(hr))
-	{
-		Running = false;
-	}
+//	if (FAILED(hr))
+//	{
+//		Running = false;
+//	}
 
 
 	hr = commandList->Reset(commandAllocator[frameIndex], pipelineStateObject);
@@ -1098,7 +1165,7 @@ void RenderApplication::UpdatePipeline()
 	//	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get() };
+		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get()};
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 
 		CD3DX12_RESOURCE_BARRIER transition = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -1226,6 +1293,8 @@ void RenderApplication::Cleanup()
 	SAFE_RELEASE(pipelineStateObject);
 	SAFE_RELEASE(rootSignature);
 	SAFE_RELEASE(vertexBuffer);
+	
+//	env_texture->Release();
 	ImGui_ImplDX12_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
@@ -1429,6 +1498,7 @@ AccelerationStructureBuffers RenderApplication::CreateBottomLevelAS(std::vector<
 	AccelerationStructureBuffers buffers;
 
 	buffers.pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSizeInbytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COMMON, nv_helpers_dx12::kDefaultHeapProps);
+//	buffers.pScratch=
 
 	buffers.pResult = nv_helpers_dx12::CreateBuffer(device, resultSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
 
@@ -1593,9 +1663,43 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateMissSignature()
 {
 	nv_helpers_dx12::RootSignatureGenerator rsc;
 
-	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV,0);
+	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_CBV, 0);
+
+	rsc.AddHeapRangesParameter({
+		{
+			0,
+			1,
+			0,
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+			4 //5th heap slot
+		} });
+//	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV,0);
 		//TODO: Finish binding data to miss shader
 	return rsc.Generate(device, true);
+}
+
+void RenderApplication::CreateEnvmapResourceHeap()
+{
+
+//	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+//	desc.NumDescriptors = 1;
+//	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+//	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+//		ID3D12DescriptorHeap* pHeap;
+//	ThrowIfFailed(device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&envmapHeap)), L"Failed to create descriptor heap in DXRHelper L162");
+	envmapHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+	
+	D3D12_CPU_DESCRIPTOR_HANDLE envHeapDescHandle = envmapHeap->GetCPUDescriptorHandleForHeapStart();
+
+		//	D3D12_CONSTANT_BUFFER_VIEW_DESC bgDesc = {};
+	//	bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
+	//	bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR);
+
+	//	device->CreateConstantBufferView(&bgDesc, envHeapDescHandle);
+//
+
+
 }
 
 void RenderApplication::CreateShaderResourceheap()
@@ -1647,15 +1751,25 @@ void RenderApplication::CreateShaderResourceheap()
 		device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
 
 		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	//	D3D12_CONSTANT_BUFFER_VIEW_DESC bgDesc = {};
-	//	bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
-	//	bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR);
-
-	//	device->CreateConstantBufferView(&bgDesc, srvHandle);
+		D3D12_SHADER_RESOURCE_VIEW_DESC envmap_srvDesc = {};
+		envmap_srvDesc.Format = image->GetMetadata().format;
+	//	envmap_srvDesc.Texture2D.MipLevels = 1;
+	//	envmap_srvDesc.Texture2D.MostDetailedMip = 0;
+	//	envmap_srvDesc.Texture2D.ResourceMinLODClamp = 0;
+		envmap_srvDesc.Texture2DArray.ArraySize = 1;
+		envmap_srvDesc.Texture2DArray.FirstArraySlice = 0;
+		envmap_srvDesc.Texture2DArray.MipLevels = 1;
+		envmap_srvDesc.Texture2DArray.MostDetailedMip = 0;
+		envmap_srvDesc.Texture2DArray.ResourceMinLODClamp = 0;
+		
 	
-	//	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	
+		envmap_srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		envmap_srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+		device->CreateShaderResourceView(env_texture.Get(), &envmap_srvDesc, srvHandle);
+		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
 }
 
 void RenderApplication::CreateShaderBindingTable()
@@ -1665,12 +1779,16 @@ void RenderApplication::CreateShaderBindingTable()
 	D3D12_GPU_DESCRIPTOR_HANDLE srvUAVHeapHandle =
 		srvUAVHeap->GetGPUDescriptorHandleForHeapStart();
 
+
+//	D3D12_GPU_DESCRIPTOR_HANDLE envHeap = envmapHeap->GetGPUDescriptorHandleForHeapStart();
 	auto heapPointer = reinterpret_cast<UINT64*>(srvUAVHeapHandle.ptr);
+
+//	auto envheapPointer = reinterpret_cast<UINT64*>(envHeap.ptr);
 
 	sbtHelper.AddRayGenerationProgram(L"RayGen", { heapPointer });
 
 	// Miss and hit shaders do not access external resources, they communicate results through the ray payload instead.
-	sbtHelper.AddMissProgram(L"Miss", {(void*)backgroundColor->GetGPUVirtualAddress()});
+	sbtHelper.AddMissProgram(L"Miss", {(void*)backgroundColor->GetGPUVirtualAddress(), heapPointer});
 	sbtHelper.AddMissProgram(L"ShadowMiss", {});
 
 
