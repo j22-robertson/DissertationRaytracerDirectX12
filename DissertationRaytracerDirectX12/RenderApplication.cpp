@@ -1,12 +1,12 @@
 #include "RenderApplication.h"
 
 #include "BottomLevelASGenerator.h"
-#include "DXRHelper.h"
+
 #include "RaytracingPipelineGenerator.h"
 #include "RootSignatureGenerator.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <functional>
-
+#include "DXRHelper.h"
 #include "tiny_obj_loader.h"
 #include "Imgui/imgui.h"
 #include "Imgui/imgui_impl_win32.h"
@@ -737,7 +737,7 @@ bool RenderApplication::InitD3D()
 	{
 		return false;
 	}
-
+	modelResourceHandler->loadFromObj("teapotuv.obj", device, commandList, "TEAPOT");
 
 
 
@@ -786,35 +786,6 @@ bool RenderApplication::InitD3D()
 
 	float prescale = 0.1;
 
-	/*
-	for (size_t i = 0; i < shapes[0].mesh.num_face_vertices.size(); i++)
-	{
-		size_t faceNum = size_t(shapes[0].mesh.num_face_vertices[i]);
-
-
-		for (size_t v = 0; v < faceNum; v++)
-		{
-			Vertex tempvert = {0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-
-			tempvert.pos.x = (attribs.vertices[v* 3 + 0] * prescale);
-			tempvert.pos.y = (attribs.vertices[v * 3 + 1]* prescale);
-			tempvert.pos.z = (attribs.vertices[v * 3 + 2]* prescale);
-
-			tempvert.color.x = 1.0;
-			tempvert.color.w = 1.0;
-
-
-			teapotVertices.push_back(tempvert);
-			//tinyobj::index_t = shapes[0].mesh.indices[i+v]
-			//attribs.vertices[3*size_t()]
-
-
-
-
-		}
-
-		}*/
-
 	for (size_t i = 0; i < attribs.vertices.size() / 3; i++)
 	{
 
@@ -848,37 +819,6 @@ bool RenderApplication::InitD3D()
 		printf("Success");
 	}
 
-
-	for(int i = 0; i < teapotIndices.size(); i+=3)
-	{
-		auto v0 = teapotVertices[teapotIndices[i]];
-		auto v1 = teapotVertices[teapotIndices[i+1]];
-		auto v2 = teapotVertices[teapotIndices[i+2]];
-
-		auto p0 = v0.pos;
-		auto p1 = v1.pos;
-		auto p2 = v2.pos;
-
-		auto uv0 = v0.uv;
-		auto uv1 = v1.uv;
-		auto uv2 = v2.uv;
-
-
-		auto delta_pos1 = DirectX::XMFLOAT3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
-		auto delta_pos2 = DirectX::XMFLOAT3(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z);
-
-
-		auto delta_uv1 = DirectX::XMFLOAT2{ uv1.x - uv0.x ,uv1.y-uv0.y};
-		auto delta_uv2 = DirectX::XMFLOAT2{ uv2.x - uv0.x,uv2.y-uv0.y };
-
-
-		auto r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-
-
-
-
-		
-	}
 
 	int vBufferTeapotSize = teapotVertNumber * sizeof(Vertex);
 
@@ -1357,9 +1297,17 @@ void RenderApplication::UpdatePipeline()
 	
 	
 		commandList->ClearDepthStencilView(dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
-		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+		//commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
+
+		commandList->IASetVertexBuffers(0, 1, &modelResourceHandler->getModelVertexBufferView("TEAPOT"));
+
 		commandList->IASetIndexBuffer(&indexBufferView);
-		commandList->DrawIndexedInstanced(teapotIndexNumber, instances.size()-1, 0, 0, 0);
+
+
+		//commandList->IASetIndexBuffer(&indexBufferView);
+		commandList->IASetIndexBuffer(&modelResourceHandler->getModelIndexView("TEAPOT"));
+		//commandList->DrawIndexedInstanced(teapotIndexNumber, instances.size()-1, 0, 0, 0);
+		commandList->DrawIndexedInstanced(modelResourceHandler->getModelIndexNumber("TEAPOT"), instances.size() - 1, 0, 0, 0);
 
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
@@ -1821,7 +1769,10 @@ void RenderApplication::CreateAccelerationStructures()
 {
 	HRESULT hr;
 
-	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, teapotVertNumber } }, { {indexBuffer, teapotIndexNumber} });
+	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { modelResourceHandler->getVertexBuffer("TEAPOT"),modelResourceHandler->getModelVertNumber("TEAPOT")}}, {{modelResourceHandler->getIndexBuffer("TEAPOT"),modelResourceHandler->getModelIndexNumber("TEAPOT")}});
+
+
+//	AccelerationStructureBuffers bottomLevelBuffers = CreateBottomLevelAS({ { vertexBuffer, teapotVertNumber } }, { {indexBuffer, teapotIndexNumber} });
 
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({ {planeBuffer.Get(), 6} }, {});
 

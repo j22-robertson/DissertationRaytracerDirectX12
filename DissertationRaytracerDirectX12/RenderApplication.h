@@ -5,6 +5,8 @@
 #include "StepTimer.h"
 #include <DirectXTex.h>
 
+
+
 //#define D3DCOMPILE_DEBUG
 struct ApplicationSettings
 {
@@ -83,6 +85,235 @@ struct Vertex {
 	DirectX::XMFLOAT2 uv;
 };
 
+struct Model
+{
+	ComPtr<ID3D12Resource> vertexBuffer;
+	UINT64 vertex_count;
+	ComPtr<ID3D12Resource> indexBuffer;
+	UINT64 index_count;
+	D3D12_INDEX_BUFFER_VIEW index_buffer_view;
+	D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view;
+};
+
+
+class ModelResourceHandler
+{
+
+	tinyobj::ObjReaderConfig reader_config;
+	tinyobj::ObjReader reader;
+	std::map<std::string, std::unique_ptr<Model>> modelMap;
+
+public:
+	D3D12_VERTEX_BUFFER_VIEW& getModelVertexBufferView(std::string name)
+	{
+		return modelMap.at(name)->vertex_buffer_view;
+	}
+
+	D3D12_INDEX_BUFFER_VIEW& getModelIndexView(std::string name)
+	{
+		return modelMap.at(name)->index_buffer_view;
+	}
+
+	ComPtr<ID3D12Resource>& getVertexBuffer(std::string name)
+	{
+		return modelMap[name]->vertexBuffer;
+	}
+	ComPtr<ID3D12Resource>& getIndexBuffer(std::string name)
+	{
+		return modelMap[name]->indexBuffer;
+	}
+
+	UINT64 getModelVertNumber(std::string name)
+	{
+		return modelMap[name]->vertex_count;
+	}
+	UINT64 getModelIndexNumber(std::string name)
+	{
+		return modelMap[name]->index_count;
+	}
+
+	
+
+
+	ModelResourceHandler()
+	{
+		modelMap = std::map < std::string, std::unique_ptr<Model>>();
+	}
+
+	bool loadFromObj(std::string filename, ID3D12Device5* device,ID3D12GraphicsCommandList* commandlist, std::string name)
+	{
+		modelMap[name] = std::make_unique<Model>();
+
+
+		if (!reader.ParseFromFile(filename, reader_config))
+		{
+			if (!reader.Error().empty())
+			{
+				std::printf("unable to read file");
+
+			}
+		}
+		//Teapot only has ONE shape/mesh, expand with multiple meshes
+
+		auto& attribs = reader.GetAttrib();
+		auto& shapes = reader.GetShapes();
+
+		auto importIndices = shapes[0].mesh.indices;
+
+
+		std::vector<UINT> indices;
+		for (auto index : importIndices)
+		{
+			indices.push_back(static_cast<UINT>(index.vertex_index));
+
+
+
+		}
+		std::vector<float> uvs;
+
+		attribs.texcoords;
+
+		modelMap[name]->index_count = indices.size();
+
+		std::vector<Vertex> vertices;
+
+		if (!shapes.empty())
+		{
+			std::printf("Successfully imported model");
+		}
+
+		//float prescale = 0.1;
+
+		for (size_t i = 0; i < attribs.vertices.size() / 3; i++)
+		{
+
+
+
+			Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0,0.0,0.0 };
+
+			tempvert.pos.x = (attribs.vertices[i * 3 + 0]);
+			tempvert.pos.y = (attribs.vertices[i * 3 + 1]);
+			tempvert.pos.z = (attribs.vertices[i * 3 + 2]);
+
+			//float e = 	attribs.texcoords[i * 3 + 0];
+
+
+			tempvert.color.x = 1.0;
+			tempvert.color.y = 0.0;
+			tempvert.color.z = 0.0;
+			tempvert.color.w = 1.0;
+
+			tempvert.uv.x = attribs.texcoords[i * 2 + 0];
+			tempvert.uv.y = attribs.texcoords[i * 2 + 1];
+
+
+			vertices.push_back(tempvert);
+
+		}
+		modelMap[name]->vertex_count = vertices.size();
+
+		if (!vertices.empty())
+		{
+			printf("Success");
+		}
+
+
+		
+		int vBufferSize = modelMap[name]->vertex_count * sizeof(Vertex);
+
+		const UINT iBufferSize = static_cast<UINT>(modelMap[name]->index_count) * sizeof(UINT);
+
+		auto heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+		auto resource_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferSize);
+
+
+
+		device->CreateCommittedResource(
+			&heap_props,
+			D3D12_HEAP_FLAG_NONE,
+			&resource_buffer_desc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&modelMap[name]->vertexBuffer));
+
+		modelMap[name]->vertexBuffer->SetName(L"vbuffer");
+
+
+
+
+		//CREATE UPLOAD HEAP
+		// USED TO UPLOAD DATA TO GPU, CPU WRITES GPU READS
+
+		ID3D12Resource* vBufferUploadHeap = {};
+		//FIX LVALUE
+		auto vbuffer_heap_props = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+		auto vbuffer_desc = CD3DX12_RESOURCE_DESC::Buffer(vBufferSize);
+
+		device->CreateCommittedResource(
+			&vbuffer_heap_props,
+			D3D12_HEAP_FLAG_NONE,
+			&vbuffer_desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&vBufferUploadHeap)
+		);
+
+		vBufferUploadHeap->SetName(L"Vertex Buffer Upload Resource Heap");
+
+		D3D12_SUBRESOURCE_DATA vertexData = {};
+
+		vertexData.pData = reinterpret_cast<BYTE*>(vertices.data());
+		vertexData.RowPitch = vBufferSize;
+		vertexData.SlicePitch = vBufferSize;
+
+
+
+		//Upload heap from CPU to GPU
+
+		UpdateSubresources(commandlist,
+			modelMap[name]->vertexBuffer.Get(),
+			vBufferUploadHeap,
+			0,
+			0,
+			1,
+			&vertexData);
+
+		//FIX LVALUE
+		auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(modelMap[name]->vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+
+
+
+
+		CD3DX12_HEAP_PROPERTIES iBufferHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+		CD3DX12_RESOURCE_DESC bufferResource = CD3DX12_RESOURCE_DESC::Buffer(iBufferSize);
+		
+		device->CreateCommittedResource(
+			&iBufferHeapProperties,
+			D3D12_HEAP_FLAG_NONE,
+			&bufferResource,
+			D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+			IID_PPV_ARGS(&modelMap[name]->indexBuffer)
+		);
+
+		UINT8* pIndexDataBegin;
+		D3D12_RANGE readRange = { 0,0 };
+
+		modelMap[name]->indexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pIndexDataBegin));
+		memcpy(pIndexDataBegin, indices.data(), iBufferSize);
+		modelMap[name]->indexBuffer->Unmap(0, nullptr);
+
+		modelMap[name]->index_buffer_view.BufferLocation = modelMap[name]->indexBuffer->GetGPUVirtualAddress();
+		modelMap[name]->index_buffer_view.Format = DXGI_FORMAT_R32_UINT,
+		modelMap[name]->index_buffer_view.SizeInBytes = iBufferSize;
+
+		return true;
+	}
+
+
+
+};
 
 
 
@@ -176,6 +407,8 @@ private:
 	/*
 	 *
 	 */
+
+	std::unique_ptr<ModelResourceHandler>  modelResourceHandler = std::make_unique<ModelResourceHandler>();
 
 	bool InitD3D();
 	bool InitializeWindow(HINSTANCE hInstance, int ShowWnd, int width, int height, bool fullscreen);
