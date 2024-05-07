@@ -26,13 +26,13 @@ void Miss(inout HitInfo payload : SV_RayPayload)
 
     //float ramp = launchIndex.y / dims.y;
     
-    //
+    float2 dimensions;
 
-    //envmap.GetDimensions(dimensions.x, dimensions.y);
+    envmap.GetDimensions(dimensions.x, dimensions.y);
 
 
     float2 uv = wsVectorToLatLong(WorldRayDirection());
 
     //envmap[uint2(uv.x * dimensions.x, uv.y * dimensions.y)].xyz,
-    payload.colorAndDistance = float4(envmap[uint2(uv.x*2048, uv.y*1024)].rgb,-1.0);
+    payload.colorAndDistance = float4(envmap[uint2(uv.x*dimensions.x, uv.y*dimensions.y)].rgb,-1.0);
 }

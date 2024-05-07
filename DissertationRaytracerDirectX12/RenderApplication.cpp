@@ -22,7 +22,10 @@ void RenderApplication::createDepthBuffer()
 	D3D12_RESOURCE_DESC depthResourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_D32_FLOAT, Width, Height, 1, 1);
 
 	depthResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+
 	CD3DX12_CLEAR_VALUE depthOptimizedClearValue(DXGI_FORMAT_D32_FLOAT, 1.0f, 0);
+
 	ThrowIfFailed(device->CreateCommittedResource(
 		&depthHeapProps, D3D12_HEAP_FLAG_NONE, &depthResourceDesc,
 		D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthOptimizedClearValue, IID_PPV_ARGS(&depthBuffer)), L"Unable to create depth buffer resource");
@@ -32,7 +35,7 @@ void RenderApplication::createDepthBuffer()
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 
 	device->CreateDepthStencilView(depthBuffer.Get(), &dsvDesc,
-		dsvHeap->GetCPUDescriptorHandleForHeapStart());
+	dsvHeap->GetCPUDescriptorHandleForHeapStart());
 }
 
 void RenderApplication::CreateCameraBuffer()
@@ -47,7 +50,7 @@ void RenderApplication::CreateCameraBuffer()
 	/// EDITED HEAP FROM 1 TO 2 TO MAKE ROOM FOR PER INSTANCE PROPERTIES
 	// TODO: Create a heap allocator class to allocate memory for the camera, instances and other const buffer properties like light data
 	constHeap = nv_helpers_dx12::CreateDescriptorHeap(
-		device, 3, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
+		device, 5, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true
 	);
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 
@@ -75,6 +78,7 @@ void RenderApplication::CreateCameraBuffer()
 	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &srvDesc, srvHandle);
 	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+	
 	ImGui_ImplDX12_Init(device, 3, DXGI_FORMAT_R8G8B8A8_UNORM,
 		constHeap.Get(),
 		// You'll need to designate a descriptor from your descriptor heap for Dear ImGui to use internally for its font texture's SRV
@@ -99,6 +103,67 @@ void RenderApplication::UpdateCameraBuffer()
 
 void RenderApplication::OnKeyUp(UINT8 key)
 {
+
+
+	switch (key)
+	{
+	case VK_UP:
+	{
+		cameraController.MoveForward();
+		return;
+	}
+	case VK_DOWN:
+	{
+		m_raster = !m_raster;
+		return;
+	}
+
+	case VK_LEFT: 
+	{
+			cameraController.MoveLeft();
+			return;
+	}
+
+	case VK_RIGHT:
+		{
+		cameraController.MoveRight();
+		return;
+		}
+
+	 default:
+	{
+		return;
+	}
+	}
+	/*
+	if(key == VK_UP)
+	{
+		cameraController.MoveForward();
+		return;
+	}
+	if(key == VK_DOWN)
+	{
+		m_raster = !m_raster;
+		return;
+	}
+	/*
+	switch(key)
+	{
+		case VK_UP: cameraController.MoveForward();
+
+	//	case VK_DOWN: cameraController.moveBack();
+
+	//	case VK_LEFT: cameraController.MoveLeft();
+
+	//	case VK_RIGHT: cameraController.MoveRight();
+
+		case VK_ACCEPT: m_raster = !m_raster;
+
+	default: return;
+	}
+	*/
+
+	/*
 	if (key == VK_UP)
 	{
 		m_raster =!m_raster;
@@ -106,18 +171,18 @@ void RenderApplication::OnKeyUp(UINT8 key)
 	if (key == VK_DOWN)
 	{
 		cameraController.MoveForward();
-	}
+	}*/
 }
 
 void RenderApplication::CreatePlaneVB()
 {
 	Vertex planeVertices[] = {
- {-1.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 0
- {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
- {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
- {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 2
- {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}, // 1
- {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f}  // 4
+ {-1.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}, // 0
+ {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}, // 1
+ {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}, // 2
+ {01.5f, -.8f, 01.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}, // 2
+ {-1.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}, // 1
+ {01.5f, -.8f, -1.5f, 1.0f, 1.0f, 1.0f, 1.0f,0.0,0.0}  // 4
 	};
 
 	const UINT planeBufferSize = sizeof(planeVertices);
@@ -234,13 +299,14 @@ void RenderApplication::LoadEnvironmentMap(const wchar_t* filename)
 
 	image = std::make_unique<DirectX::ScratchImage>();
 
-	ThrowIfFailed(DirectX::LoadFromHDRFile(L"cobblestone_street_night_2k.hdr", nullptr, *image), L"Unable to read metadata from " + *filename);
+	ThrowIfFailed(DirectX::LoadFromHDRFile(filename, nullptr, *image), L"Unable to read metadata from " + *filename);
 
 	ThrowIfFailed(DirectX::CreateTexture(device,image->GetMetadata(), &env_texture),L"Unable to load texture "+ *filename);
 	env_texture->SetName(L"Environment Map");
 
 
-	
+	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+
 
 	DirectX::PrepareUpload(device, image->GetImages(), image->GetImageCount(), image->GetMetadata(), subresources);
 	const UINT64 env_buffsize = GetRequiredIntermediateSize(env_texture.Get(), 0, static_cast<unsigned int>(subresources.size()));
@@ -268,18 +334,59 @@ void RenderApplication::LoadEnvironmentMap(const wchar_t* filename)
 
 }
 
-void RenderApplication::LoadTextureFromFile(const wchar_t* filename)
+void RenderApplication::LoadTextureFromFile(const wchar_t* filename, std::string name)
 {
 
-	/*
-	DirectX::TexMetadata* data = nullptr;
 
-	//ToDo: Handle error
-	DirectX::LoadFromDDSFile(filename, DirectX::DDS_FLAGS_NONE, data, *image.Get());
+	
+	auto temp_image = std::make_unique<DirectX::ScratchImage>();
 
-	ComPtr<ID3D12Resource> texture;
-	DirectX::CreateTexture(device, *data, &texture);*/
 
+	
+
+	ThrowIfFailed(DirectX::LoadFromWICFile(filename, DirectX::WIC_FLAGS_NONE, &textureMetaData[name], *temp_image), L"Unable to read metadata from water.png");
+
+
+	textures[name] = ComPtr<ID3D12Resource>();
+
+
+	
+	ThrowIfFailed(DirectX::CreateTexture(device, textureMetaData[name], &textures[name]), L"Unable to load texture " + *filename);
+
+	textures[name]->SetName(filename);
+	//env_texture->SetName(L"Environment Map");
+	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+
+
+
+
+	DirectX::PrepareUpload(device, temp_image->GetImages(), temp_image->GetImageCount(), temp_image->GetMetadata(), subresources);
+	const UINT64 texture_buffsize = GetRequiredIntermediateSize(textures[name].Get(), 0, static_cast<unsigned int>(subresources.size()));
+	auto heapprops = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	auto buffdesc = CD3DX12_RESOURCE_DESC::Buffer(texture_buffsize);
+
+
+	tempHeaps[name] = ComPtr<ID3D12Resource>();
+
+	// tempheaps.emplace_back(ComPtr<ID3D12Resource>());// = ComPtr<ID3D12Resource>();
+
+	ThrowIfFailed(device->CreateCommittedResource(
+		&heapprops,
+		D3D12_HEAP_FLAG_NONE,
+		&buffdesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(tempHeaps[name].GetAddressOf())), L"Unable to create committed memory for texture: " + *filename);
+
+	tempHeaps[name]->SetName(L"Upload heap:" + *filename);
+
+
+	UpdateSubresources(commandList, textures[name].Get(), tempHeaps[name].Get(), 0, 0, static_cast<unsigned int>(subresources.size()), subresources.data());
+
+
+	auto rbtemp = CD3DX12_RESOURCE_BARRIER::Transition(textures[name].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
+
+	commandList->ResourceBarrier(1, &rbtemp);
 	
 
 }
@@ -373,8 +480,8 @@ bool RenderApplication::InitD3D()
 
 
 
-
-
+	timer.SetFixedTimeStep(true);
+	timer.SetTargetElapsedSeconds(1.f / 60.f);
 
 	D3D12_COMMAND_QUEUE_DESC commandQueueDesc = {};
 
@@ -596,6 +703,7 @@ bool RenderApplication::InitD3D()
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 		{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT,0,12,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0},
+		{"UV",0,DXGI_FORMAT_R32G32_FLOAT, 28,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA}
 	};
 
 
@@ -657,7 +765,9 @@ bool RenderApplication::InitD3D()
 
 
 	}
+	std::vector<float> uvs;
 
+	attribs.texcoords;
 
 
 	//auto tpIbufferSize = teapotIndices.size();
@@ -710,16 +820,22 @@ bool RenderApplication::InitD3D()
 
 
 
-		Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0 };
+		Vertex tempvert = { 0.0,0.0,0.0,0.0,0.0,.0,.0,0.0,0.0 };
 
-		tempvert.pos.x = (attribs.vertices[i * 3 + 0] * prescale);
-		tempvert.pos.y = (attribs.vertices[i * 3 + 1] * prescale);
-		tempvert.pos.z = (attribs.vertices[i * 3 + 2] * prescale);
+		tempvert.pos.x = (attribs.vertices[i * 3 + 0]);
+		tempvert.pos.y = (attribs.vertices[i * 3 + 1]);
+		tempvert.pos.z = (attribs.vertices[i * 3 + 2]);
+
+	//float e = 	attribs.texcoords[i * 3 + 0];
+		
 
 		tempvert.color.x = 1.0;
 		tempvert.color.y = 0.0;
 		tempvert.color.z = 0.0;
 		tempvert.color.w = 1.0;
+
+		tempvert.uv.x = attribs.texcoords[i*2 + 0];
+		tempvert.uv.y = attribs.texcoords[i*2 + 1];
 
 
 		teapotVertices.push_back(tempvert);
@@ -730,6 +846,38 @@ bool RenderApplication::InitD3D()
 	if (!teapotVertices.empty())
 	{
 		printf("Success");
+	}
+
+
+	for(int i = 0; i < teapotIndices.size(); i+=3)
+	{
+		auto v0 = teapotVertices[teapotIndices[i]];
+		auto v1 = teapotVertices[teapotIndices[i+1]];
+		auto v2 = teapotVertices[teapotIndices[i+2]];
+
+		auto p0 = v0.pos;
+		auto p1 = v1.pos;
+		auto p2 = v2.pos;
+
+		auto uv0 = v0.uv;
+		auto uv1 = v1.uv;
+		auto uv2 = v2.uv;
+
+
+		auto delta_pos1 = DirectX::XMFLOAT3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
+		auto delta_pos2 = DirectX::XMFLOAT3(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z);
+
+
+		auto delta_uv1 = DirectX::XMFLOAT2{ uv1.x - uv0.x ,uv1.y-uv0.y};
+		auto delta_uv2 = DirectX::XMFLOAT2{ uv2.x - uv0.x,uv2.y-uv0.y };
+
+
+		auto r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
+
+
+
+
+		
 	}
 
 	int vBufferTeapotSize = teapotVertNumber * sizeof(Vertex);
@@ -881,7 +1029,31 @@ bool RenderApplication::InitD3D()
 
 	auto rbtemp3 = CD3DX12_RESOURCE_BARRIER::Transition(env_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ);
 	commandList->ResourceBarrier(1, &rbtemp3);
+
+
+	LoadTextureFromFile(L"BrickWall29_1K_BaseColor.png","TEST");
+
+
+	LoadTextureFromFile(L"rusty-ribbed-metal_albedo.png", "ALBEDO");
+	LoadTextureFromFile(L"rusty-ribbed-metal_metallic.png", "METAL");
+	LoadTextureFromFile(L"rusty-ribbed-metal_normal-dx.png", "NORMAL");
+	LoadTextureFromFile(L"rusty-ribbed-metal_roughness.png", "ROUGHNESS");
+
+//	LoadTextureFromFile(L"clay-shingles1_albedo.png", "ALBEDO");
+//	LoadTextureFromFile(L"clay-shingles1_metallic.png", "METAL");
+//	LoadTextureFromFile(L"clay-shingles1_normal-dx.png", "NORMAL");
+//	LoadTextureFromFile(L"clay-shingles1_roughness.png", "ROUGHNESS");
+	//clay - shingles1_albedo
+	//	LoadTextureFromFile(L"rusty-ribbed-metal_roughness.png", "ROUGHNESS");
 	// Allocate memory buffer storing the RayTracing output. Has same DIMENSIONS as the target image
+
+
+
+
+//	LoadTextureFromFile(L"textured-aluminum_albedo.png", "ALBEDO");
+//	LoadTextureFromFile(L"textured-aluminum_metallic.png", "METAL");
+//	LoadTextureFromFile(L"textured-aluminum_normal-dx.png", "NORMAL");
+//	LoadTextureFromFile(L"textured-aluminum_roughness.png", "ROUGHNESS");
 	CreateRaytracingOutputBuffer();
 
 
@@ -1074,24 +1246,33 @@ void RenderApplication::mainloop()
 				DispatchMessage(&msg);
 			}
 			 {
-
-				ImGui_ImplDX12_NewFrame();
-				ImGui_ImplWin32_NewFrame();
-				ImGui::NewFrame();
-			//	ImGui::ShowDemoWindow();
+			/*	float size = 1.0;
+		
 				UpdateCameraBuffer();
-				ImGui::Begin("RotationSpeed");
-				ImGui::SliderFloat("Speed", &rotspeed,0.0,100.0);
-				ImGui::End();
-				ImGui::Begin("Colours");
-				ImGui::SliderFloat4( "RGB",bgcolour.m128_f32, 0.0, 1.0);
-				ImGui::End();
+				
 				UpdateBackgroundBuffer();
+				
+
+
+				float dt = currentTime - timer.GetElapsedSeconds();
+				currentTime = timer.GetElapsedSeconds();
+
+
+
+
 				game_time++;
 				instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
-					}, static_cast<float>(game_time) / rotspeed) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f);
+					}, temprot  += rotspeed * dt) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f) * DirectX::XMMatrixScaling(size,size,size);
+
+				instances[1].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+					}, rotspeed) * DirectX::XMMatrixTranslation(23.0f/size, 0.0f , 0.0f) * DirectX::XMMatrixScaling(size, size, size);
+
+				instances[2].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+					},  rotspeed) * DirectX::XMMatrixTranslation(-23.0f / size, 0.0f, 0.0f)* DirectX::XMMatrixScaling(size, size, size);
+
 				UpdatePerInstancePropertiesBuffer();
-				Render();
+				Render();*/
+				Tick();
 
 				//Update loop goes here
 			}
@@ -1102,6 +1283,18 @@ void RenderApplication::mainloop()
 void RenderApplication::UpdatePipeline()
 {
 		HRESULT hr;
+	//	ImGui::EndFrame();
+
+		ImGui_ImplDX12_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+		ImGui::Begin("RotationSpeed");
+
+		ImGui::SliderFloat("Speed", &rotspeed, 0.0, 2.0);
+	///	ImGui::SliderFloat("Size", &size, 1.0, 10.0);
+		ImGui::End();
+
+		ImGui::Render();
 
 	WaitForPreviousFrame();
 
@@ -1112,6 +1305,7 @@ void RenderApplication::UpdatePipeline()
 //		Running = false;
 //	}
 
+	
 
 	hr = commandList->Reset(commandAllocator[frameIndex], pipelineStateObject);
 
@@ -1126,47 +1320,58 @@ void RenderApplication::UpdatePipeline()
 
 	///TODO: fix l-value for rb and rb2
 
-		ImGui::Render();
 	auto rb = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	commandList->ResourceBarrier(1, &rb);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), frameIndex, rtvDescriptorSize);
 	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
-	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+
+
+
+
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE dsvHandle(dsvHeap->GetCPUDescriptorHandleForHeapStart());
-	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
+	commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
+	commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 	if (m_raster)
 	{
-		commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
+	
+	
 		std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 		commandList->SetGraphicsRootDescriptorTable(
 			0, constHeap->GetGPUDescriptorHandleForHeapStart());
-
-	
-
+		
 
 		commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
+	
 		D3D12_GPU_DESCRIPTOR_HANDLE handle = constHeap->GetGPUDescriptorHandleForHeapStart();
 		commandList->SetGraphicsRootDescriptorTable(0, handle);
 		commandList->SetGraphicsRootDescriptorTable(1, handle);
 
 	//	commandList->SetGraphicsRoot32BitConstant(2, 0, 0);
-
+	
+	
+		commandList->ClearDepthStencilView(dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
 		commandList->IASetVertexBuffers(0, 1, &vertexBufferView);
 		commandList->IASetIndexBuffer(&indexBufferView);
 		commandList->DrawIndexedInstanced(teapotIndexNumber, instances.size()-1, 0, 0, 0);
 
 		commandList->IASetVertexBuffers(0, 1, &planeBufferview);
 		commandList->DrawInstanced(6, 1, 0, 0);
-	//	ImGui::Render();
-	//	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList;
+
+		commandList->ClearDepthStencilView(dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
 	
+		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+
+	//	ImGui::Render();
+	//	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
 	}
 	else {
 
@@ -1175,7 +1380,7 @@ void RenderApplication::UpdatePipeline()
 	//	const float clearColor[] = { 0.0f,0.2f,0.4f,1.0f };
 		commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get()};
+		std::vector<ID3D12DescriptorHeap*> heaps = { srvUAVHeap.Get(), tempSamplerHeap.Get()};
 		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 
 		CD3DX12_RESOURCE_BARRIER transition = CD3DX12_RESOURCE_BARRIER::Transition(
@@ -1225,14 +1430,26 @@ void RenderApplication::UpdatePipeline()
 		commandList->ResourceBarrier(1, &transition);
 
 	}
-
-	//TODO: Research how to handle imgui with raytracing (This works and seems correct though, simply switching our descriptor heap for rasterizing our imgui window)
-	std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
-	commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
-	commandList->SetGraphicsRootDescriptorTable(
-		0, constHeap->GetGPUDescriptorHandleForHeapStart());
+//	commandList->ClearDepthStencilView(dsvHeap->GetCPUDescriptorHandleForHeapStart(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0.0, 0.0, nullptr);
+//	ImGui::EndFrame();
 //	ImGui::Render();
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+//	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+//	ImGui::Render();
+	//ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+	//TODO: Research how to handle imgui with raytracing (This works and seems correct though, simply switching our descriptor heap for rasterizing our imgui window)
+	if(!m_raster)
+	{
+		ImGui::Render();
+		
+		std::vector<ID3D12DescriptorHeap*> heaps = { constHeap.Get() };
+		commandList->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
+		commandList->SetGraphicsRootDescriptorTable(
+			0, constHeap->GetGPUDescriptorHandleForHeapStart());
+		ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+	}
+
+//	ImGui::Render();
+
 
 
 	auto rb2 = CD3DX12_RESOURCE_BARRIER::Transition(renderTargets[frameIndex], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -1310,12 +1527,48 @@ void RenderApplication::Cleanup()
 	ImGui::DestroyContext();
 }
 
+void RenderApplication::Tick()
+{
+	timer.Tick([&]
+		{
+			update(timer);
+	});
+
+	Render();
+}
+
+void RenderApplication::update(DX::StepTimer const& step_timer)
+{
+	float size = 1.0;
+	UpdateCameraBuffer();
+
+	UpdateBackgroundBuffer();
+
+	double dt =(double)currentTime - step_timer.GetElapsedSeconds();
+
+
+
+
+
+	game_time++;
+	instances[0].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+		}, temprot += rotspeed * dt) * DirectX::XMMatrixTranslation(0.f, 0.1f * cosf(game_time / 20.0f), 0.0f) * DirectX::XMMatrixScaling(size, size, size);
+
+	instances[1].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+		}, rotspeed) * DirectX::XMMatrixTranslation(30.0f / size, 0.0f, 0.0f) * DirectX::XMMatrixScaling(size, size, size);
+
+	instances[2].second = DirectX::XMMatrixRotationAxis({ 0.f, 1.0f, 0.f
+		}, rotspeed) * DirectX::XMMatrixTranslation(-30.0f / size, 0.0f, 0.0f) * DirectX::XMMatrixScaling(size, size, size);
+
+	UpdatePerInstancePropertiesBuffer();
+}
+
 void RenderApplication::Render()
 {
 	HRESULT hr;
 	UpdatePipeline();
-//	ImGui::Render();
-///	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
+
+
 	ID3D12CommandList* ppCommandLists[] = { commandList };
 
 
@@ -1573,9 +1826,9 @@ void RenderApplication::CreateAccelerationStructures()
 	AccelerationStructureBuffers planeBottomLevelBuffer = CreateBottomLevelAS({ {planeBuffer.Get(), 6} }, {});
 
 	instances = { {bottomLevelBuffers.pResult, DirectX::XMMatrixIdentity()},
-		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1.0,0,0)},
+		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(-1.0,0,0) },
 		{bottomLevelBuffers.pResult, DirectX::XMMatrixTranslation(1.0,0,0)},
-		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0)} };
+		{planeBottomLevelBuffer.pResult, DirectX::XMMatrixTranslation(0,0,0) * DirectX::XMMatrixScaling(100,100,100)} }  ;
 
 	CreateTopLevelAS(instances, false);
 
@@ -1635,6 +1888,7 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateRayGenSignature()
 		}
 		});
 
+
 	return rsc.Generate(device, true);
 }
 
@@ -1644,6 +1898,7 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateHitSignature()
 
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 0/*t0*/);
 	rsc.AddRootParameter(D3D12_ROOT_PARAMETER_TYPE_SRV, 1/*t1*/);
+
 	rsc.AddHeapRangesParameter(
 		{
 			{
@@ -1660,10 +1915,50 @@ ComPtr<ID3D12RootSignature> RenderApplication::CreateHitSignature()
 				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
 				3 /*4th heap slot*/
 			} /* Per Instance Data*/
+			,
+			{
+				4/*t4*/,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				6, //TODO: Replace with proper heap slot for albedo texture
+			},
+			{ //albedo
+			5,
+			1,
+			0,
+			D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				7 /* heap slot 8*/
+			},
+			
+			{ //metal
+				6,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				8
+			},
+			{ //roughness
+				7,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				9
+			}, 
+					{ //normal
+				8,
+				1,
+				0,
+				D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+				10
+			},
 		}
 	);
 
-
+	rsc.AddHeapRangesParameter(
+		{ { 0,1,0,
+	D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+	0} });
 
 
 	return rsc.Generate(device, true);
@@ -1723,13 +2018,32 @@ void RenderApplication::CreateEnvmapResourceHeap()
 void RenderApplication::CreateShaderResourceheap()
 {
 
-	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 6, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+	 tempSamplerHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 1, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, true);
+
+
+	D3D12_CPU_DESCRIPTOR_HANDLE tsHandle = tempSamplerHeap->GetCPUDescriptorHandleForHeapStart();
+
+	D3D12_SAMPLER_DESC samplerDesc{};
+
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NONE;
+	samplerDesc.MaxAnisotropy = 1;
+	samplerDesc.MinLOD = 0;
+	samplerDesc.MaxLOD = 0;
+	device->CreateSampler(&samplerDesc, tsHandle);
+
+
+
+	srvUAVHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 11, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
 
 	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = srvUAVHeap->GetCPUDescriptorHandleForHeapStart();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
 
-		// The Create X view methods write the view info directly into srvHandle
+	// The Create X view methods write the view info directly into srvHandle
 	UAVDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 
 	device->CreateUnorderedAccessView(outputResource.Get(), nullptr, &UAVDesc, srvHandle);
@@ -1741,55 +2055,129 @@ void RenderApplication::CreateShaderResourceheap()
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.RaytracingAccelerationStructure.Location = topLevelASBuffers.pResult->GetGPUVirtualAddress();
 
-		device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
 
-		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 
-		cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
-		cbvDesc.SizeInBytes = cameraBufferSize;
-		device->CreateConstantBufferView(&cbvDesc, srvHandle);
+	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = cameraBufferSize;
+	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
-		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
-		perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
-		perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-		perInstanceViewDesc.Buffer.FirstElement = 0;
-		perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
-		perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
-		perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
+	perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+	perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	perInstanceViewDesc.Buffer.FirstElement = 0;
+	perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+	perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-		device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
 
-		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
 
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC bgDesc = {};
 
-		bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
-		bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR)*16;
-		device->CreateConstantBufferView(&bgDesc, srvHandle);
+	bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
+	bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR) * 16;
+	device->CreateConstantBufferView(&bgDesc, srvHandle);
 
-		srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 
-		D3D12_SHADER_RESOURCE_VIEW_DESC envmap_srvDesc = {};
-		envmap_srvDesc.Format = image->GetMetadata().format;
-		envmap_srvDesc.Texture2D.MipLevels = image->GetMetadata().mipLevels;
-		envmap_srvDesc.Texture2D.ResourceMinLODClamp = 0;
-		envmap_srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		envmap_srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	D3D12_SHADER_RESOURCE_VIEW_DESC envmap_srvDesc = {};
+	envmap_srvDesc.Format = image->GetMetadata().format;
+	envmap_srvDesc.Texture2D.MipLevels = image->GetMetadata().mipLevels;
 
-		device->CreateShaderResourceView(env_texture.Get(), &envmap_srvDesc, srvHandle);
 
+	envmap_srvDesc.Texture2D.ResourceMinLODClamp = 0;
+	envmap_srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	envmap_srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	device->CreateShaderResourceView(env_texture.Get(), &envmap_srvDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC testTextureDesc = {};
+
+	testTextureDesc.Format = textureMetaData["TEST"].format;
+	testTextureDesc.Texture2D.MipLevels = textureMetaData["TEST"].mipLevels;
+
+	testTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	testTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	testTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["TEST"].Get(), &testTextureDesc, srvHandle);
+
+	
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_SHADER_RESOURCE_VIEW_DESC albedoTextureDesc = {};
+
+	albedoTextureDesc.Format = textureMetaData["ALBEDO"].format;
+	albedoTextureDesc.Texture2D.MipLevels = textureMetaData["ALBEDO"].mipLevels;
+
+	albedoTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	albedoTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	albedoTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["ALBEDO"].Get(), &albedoTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_SHADER_RESOURCE_VIEW_DESC metalTextureDesc = {};
+
+	metalTextureDesc.Format = textureMetaData["METAL"].format;
+	metalTextureDesc.Texture2D.MipLevels = textureMetaData["METAL"].mipLevels;
+
+	metalTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	metalTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	metalTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["METAL"].Get(), &metalTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC roughnessTextureDesc = {};
+
+	roughnessTextureDesc.Format = textureMetaData["ROUGHNESS"].format;
+	roughnessTextureDesc.Texture2D.MipLevels = textureMetaData["ROUGHNESS"].mipLevels;
+
+	 roughnessTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	roughnessTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	roughnessTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["ROUGHNESS"].Get(), &roughnessTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC normalTextureDesc = {};
+	normalTextureDesc.Format = textureMetaData["NORMAL"].format;
+	normalTextureDesc.Texture2D.MipLevels = textureMetaData["NORMAL"].mipLevels;
+
+	normalTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	normalTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	normalTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["NORMAL"].Get(), &normalTextureDesc, srvHandle);
+
+
+//	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+//	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	
 }
 
 void RenderApplication::CreateShaderBindingTable()
@@ -1802,6 +2190,7 @@ void RenderApplication::CreateShaderBindingTable()
 
 //	D3D12_GPU_DESCRIPTOR_HANDLE envHeap = envmapHeap->GetGPUDescriptorHandleForHeapStart();
 	auto heapPointer = reinterpret_cast<UINT64*>(srvUAVHeapHandle.ptr);
+	auto samplerHeapPointer = reinterpret_cast<UINT64*>(tempSamplerHeap->GetGPUDescriptorHandleForHeapStart().ptr);
 
 //	auto envheapPointer = reinterpret_cast<UINT64*>(envHeap.ptr);
 
@@ -1820,7 +2209,7 @@ void RenderApplication::CreateShaderBindingTable()
 	/// </summary>
 	for (int i = 0; i < instances.size() - 1; i++)
 	{
-		sbtHelper.AddHitGroup(L"HitGroup", { (void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress()/*(void*)materialproperties->GetGPUVA*/});
+		sbtHelper.AddHitGroup(L"HitGroup", { (void*)vertexBuffer->GetGPUVirtualAddress(),(void*)indexBuffer->GetGPUVirtualAddress(),heapPointer,samplerHeapPointer/*(void*)materialproperties->GetGPUVA*/});
 		sbtHelper.AddHitGroup(L"ShadowHitGroup", {});
 	}
 

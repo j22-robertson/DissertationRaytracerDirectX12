@@ -47,8 +47,23 @@ public:
 
 	void MoveForward()
 	{
-		camPosition.m128_f32[2] += 0.05f;
+		camPosition.m128_f32[2] += 0.2f;
 	}
+
+	void MoveLeft()
+	{
+		camPosition.m128_f32[1] -= 0.2f;
+	}
+	void MoveRight()
+	{
+		camPosition.m128_f32[1] += 0.2f;
+	}
+	void moveBack()
+	{
+		camPosition.m128_f32[2] -= 0.05;
+	}
+	void MoveUp()
+	{}
 
 
 	std::vector<DirectX::XMMATRIX> GetCameraData(int width, int height);

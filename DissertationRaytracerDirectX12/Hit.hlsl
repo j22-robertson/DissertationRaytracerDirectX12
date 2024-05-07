@@ -1,16 +1,21 @@
 #include "Common.hlsl"
 
+
 struct ShadowHitInfo
 {
     bool ishit;
 };
+
+SamplerState tempSampler : register(s0);
 
 
 struct STriVertex
 {
     float3 vertex;
     float4 color;
+    float2 uv;
 };
+
 /*
 cbuffer Colors : register(b0)
 {
@@ -36,6 +41,27 @@ StructuredBuffer<STriVertex> BTriVertex : register(t0);
 StructuredBuffer<int> indices : register(t1);
 RaytracingAccelerationStructure SceneBVH : register(t2);
 StructuredBuffer<PerInstanceProperties> perInstance : register(t3);
+
+Texture2D<float4> testTexture: register(t4);
+Texture2D<float4> albedoTex: register(t5);
+Texture2D<float4> metallicTex:register(t6);
+Texture2D<float4> roughnessTex: register(t7);
+Texture2D<float4> normalTex:register(t8);
+SamplerState MeshTextureSampler
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+//SamplerState TestSampler : register(t5);
+/*
+SamplerState MeshTextureSampler
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Wrap;
+    AddressV = Wrap;
+}*/;
+
 
 float TrowbridgeReitzD(float roughness, float NdotH)
 {
@@ -86,7 +112,7 @@ float3 sampleMicrofacet(float2 bary, float roughness, float3 normal)
 
     float a2 = roughness * roughness;
 
-    float cosThetaH = sqrt(max(.0f, (1.0 - random) / ((a2 - 1.0) * random+1)));
+    float cosThetaH = sqrt(max(.0f, (1.0 - random) / ((a2 - 1.0) * random+1.0)));
     float sinThetaH = sqrt(max(0.0f, 1.0f - cosThetaH * cosThetaH));
     float phiH = random2 * 3.14159265359 * 2.0f;
 
@@ -114,12 +140,20 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
     float3 f0 = float3(0.04, 0.04, 0.04);
 	
-    float3 hitColor = BTriVertex[indices[vertId + 0]].color * barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
+    float3 hitColor = BTriVertex[indices[vertId + 0]].color *  barycentrics.x + BTriVertex[indices[vertId + 1]].color * barycentrics.y + BTriVertex[indices[vertId + 2]].color * barycentrics.z;
 
-    if (InstanceID() == 0)
+
+    float2 baryuv = BTriVertex[indices[vertId + 0]].uv * barycentrics.x + BTriVertex[indices[vertId + 1]].uv * barycentrics.y + BTriVertex[indices[vertId + 2]].uv * barycentrics.z;
+
+
+
+
+
+     if (InstanceID() == 0)
     {
-        roughness = 0.0;
-        metallic =1.0;
+        roughness = roughnessTex.SampleLevel(tempSampler, baryuv, 0).rgb;
+        metallic = metallicTex.SampleLevel(tempSampler, baryuv, 0).rgb;
+        hitColor = albedoTex.SampleLevel(tempSampler, baryuv, 0).rgb;
       //  hitColor = float3(0.23, 0.7, 0.1);
     }
     
@@ -128,9 +162,25 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     float3 e1 = BTriVertex[indices[vertId + 1]].vertex - BTriVertex[indices[vertId + 0]].vertex;
     float3 e2 = BTriVertex[indices[vertId + 2]].vertex - BTriVertex[indices[vertId + 0]].vertex;
     
-    float3 normal = normalize(cross(e2, e1));
+    float3 normal_ = normalize(cross(e2, e1));
+
+
     
-    normal = mul(perInstance[InstanceID()].objectToWorldNormal, float4(normal, 0.f)).xyz;
+    float3 normal = normalize(mul(perInstance[InstanceID()].objectToWorldNormal, float4(normal_, 0.f)).xyz);
+
+   float3 t_normal = float3( 0.0,0.0,0.0 );
+    if (InstanceID() == 0)
+    {
+
+
+    t_normal = normalTex.SampleLevel(tempSampler, baryuv, 0).rgb * 2.0 - 1.0;
+     t_normal = normalize(mul(perInstance[InstanceID()].objectToWorldNormal, float4(t_normal, 0.f)).xyz);
+      normal = normalize(mul(perInstance[InstanceID()].objectToWorldNormal, float4(normal_, 0.f)).xyz + (t_normal *0.3));
+    }
+
+
+   
+
     bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
 
     if (isBackFacing)
@@ -142,8 +192,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
-    float3 lightPos = float3(2, 10, -2);
-    
+    float3 lightPos = float3(4, 20, -4);
     float3 centerLightDir = normalize(lightPos - worldOrigin);
     //bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
 
@@ -209,6 +258,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     }
     float3 halfway = normalize(view_direction + centerLightDir);
 
+   
     float nDotL = max(0.f, dot(normal, centerLightDir));
     float nDotV = max(0.f, dot(normal, view_direction));
     float nDotH = max(0.f, dot(normal, halfway));
@@ -244,9 +294,8 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     {
         HitInfo reflectionPayload;
         reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
-
-        float3 microfacet =  sampleMicrofacet(attrib.bary, roughness, normal);
-        float3 reflectedDirection = reflect(-view_direction,microfacet);
+        float3 halfway = sampleMicrofacet(attrib.bary, roughness, normal);
+        float3 reflectedDirection = reflect(-view_direction,halfway);
 
         //float3 checkreflect = reflection * reflection;
         reflectionPayload.canReflect = false;
@@ -283,7 +332,14 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     float3 cl2 = cl / (cl + float3(1.0, 1.0, 1.0));
     float3 cl3 = pow(cl2, float3(1.0, 1.0, 1.0)/2.2);
 
-  payload.colorAndDistance = float4(cl3, RayTCurrent());
+
+    float2 dimensions;
+    testTexture.GetDimensions(dimensions.x, dimensions.y);
+
+ 
+  // payload.colorAndDistance = float4(albedoTex.SampleLevel(tempSampler, baryuv, 0).rgb, RayTCurrent());
+  payload.colorAndDistance =  float4(cl3, RayTCurrent());
+    //float4(cl3, RayTCurrent());
 }
 
 
@@ -298,7 +354,7 @@ void PlaneClosestHit(inout HitInfo payload, Attributes attrib)
 
 
     // Hard coded light position
-    float3 lightPos = float3(2,10, -2);
+    float3 lightPos = float3(4,20, -4);
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     

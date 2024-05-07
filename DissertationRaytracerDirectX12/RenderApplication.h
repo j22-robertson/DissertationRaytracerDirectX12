@@ -2,6 +2,7 @@
 #include "stdafx.h"
 #include "tiny_obj_loader.h"
 #include "Imgui/imgui.h"
+#include "StepTimer.h"
 #include <DirectXTex.h>
 
 //#define D3DCOMPILE_DEBUG
@@ -76,9 +77,10 @@ return true;
 
 
 struct Vertex {
-	Vertex(float x, float y, float z, float r, float g, float b, float a) : pos(x, y, z), color(r, g, b, a) {}
+	Vertex(float x, float y, float z, float r, float g, float b, float a, float u, float v) : pos(x, y, z), color(r, g, b, a), uv{ u, v } {}
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 color;
+	DirectX::XMFLOAT2 uv;
 };
 
 
@@ -96,7 +98,7 @@ public:
 	UINT teapotVertNumber;
 	UINT teapotIndexNumber;
 
-	std::string inputfile = "teapot.obj.txt";
+	std::string inputfile = "teapotuv.obj";
 	tinyobj::ObjReaderConfig reader_config;
 	tinyobj::ObjReader reader;
 
@@ -133,6 +135,10 @@ private:
 
 	void CreateShaderResourceheap();
 	void CreateShaderBindingTable();
+
+	DX::StepTimer timer;
+
+	float temprot =0.0;
 	
 
 	DirectX::XMVECTOR bgcolour;
@@ -146,12 +152,14 @@ private:
 
 	void LoadEnvironmentMap(const wchar_t* filename);
 	DirectX::TexMetadata data;
+
+	std::map < std::string, DirectX::TexMetadata > textureMetaData;
 	std::unique_ptr<DirectX::ScratchImage> image;
+	ComPtr<ID3D12Resource> uploadHeap;
 
-	std::vector<D3D12_SUBRESOURCE_DATA> subresources;
-	void LoadTextureFromFile(const wchar_t* filename);
+	void LoadTextureFromFile(const wchar_t* filename,std::string name);
 
-
+	DirectX::TexMetadata tempdata;
 
 	void CreatePerInstancePropertiesBuffer();
 	void UpdatePerInstancePropertiesBuffer();
@@ -161,7 +169,7 @@ private:
 	void CreateCameraBuffer();
 	void UpdateCameraBuffer();
 
-
+	std::map < std::string, ComPtr<ID3D12Resource> >tempHeaps;
 	
 	void CreatePlaneVB(); 
 
@@ -178,14 +186,16 @@ private:
 
 	void Cleanup();
 
-	void update();
+	void Tick();
+	void update(DX::StepTimer const& step_timer);
 	void Render();
 
 
 	//void OnKeyUp(UINT8 key);
 
+	std::map<std::string, ComPtr<ID3D12Resource>> textures;
 
-
+	double currentTime = 0.0;
 
 private:
 	HWND hwnd = NULL;
@@ -265,6 +275,8 @@ private:
 	ComPtr<ID3D12Resource> cameraBuffer;
 	ComPtr<ID3D12DescriptorHeap> constHeap;
 
+	ComPtr<ID3D12DescriptorHeap> tempSamplerHeap;
+
 	ComPtr<ID3D12Resource> globalConstBuffer;
 
 	std::vector<ComPtr<ID3D12Resource>> perInstanceConstantBuffers;
@@ -313,7 +325,7 @@ private:
 
 
 	//TODO: Remove temp rotspeed variable
-	float rotspeed = 50.0;
+	float rotspeed = 0.0;
 	std::uint32_t game_time;
 
 	ComPtr<ID3D12Resource> perInstancePropertiesBuffer;
