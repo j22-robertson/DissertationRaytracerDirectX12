@@ -370,6 +370,9 @@ private:
 	DX::StepTimer timer;
 
 	float temprot =0.0;
+
+
+	void CreateScene2();
 	
 
 	DirectX::XMVECTOR bgcolour;
@@ -407,7 +410,7 @@ private:
 	/*
 	 *
 	 */
-
+	void CreateNamedTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly, std::string name);
 	std::unique_ptr<ModelResourceHandler>  modelResourceHandler = std::make_unique<ModelResourceHandler>();
 
 	bool InitD3D();
@@ -505,6 +508,10 @@ private:
 
 	std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>> instances;
 
+
+	std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>> scenetwo_instances;
+
+
 	ComPtr<ID3D12Resource> cameraBuffer;
 	ComPtr<ID3D12DescriptorHeap> constHeap;
 
@@ -527,6 +534,9 @@ private:
 	ComPtr<ID3D12Resource> outputResource;
 	ComPtr<ID3D12DescriptorHeap> srvUAVHeap;
 
+
+	ComPtr<ID3D12DescriptorHeap> SceneTwoHeap;
+
 	CameraController cameraController;
 
 	ComPtr<IDxcBlob> rayGenLibrary;
@@ -541,9 +551,14 @@ private:
 	ComPtr<ID3D12RootSignature> shadowHitSignature;
 
 
+	std::map<std::string, AccelerationStructureBuffers> scenes;
+
+
 	ComPtr<ID3D12StateObject> rtStateObject;
 
 	ComPtr<ID3D12StateObjectProperties> rtStateObjectProps;
+
+	AccelerationStructureBuffers SceneTwoASBuffers;
 
 
 	ComPtr<ID3D12Resource> planeBuffer;

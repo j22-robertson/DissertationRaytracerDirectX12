@@ -83,10 +83,10 @@ float SBG(float roughness, float3 N, float3 X)
 }
 
 float SmithG(float roughness, float3 normal, float3 view_dir, float3 light_dir)
-{
+{   
     return SBG(roughness, normal, view_dir) * SBG(roughness, normal, light_dir);
 }
-
+//(from "Efficient Construction of Perpendicular Vectors Without Branching")
 float3 getPerpendicularVector(float3 u)
 {
     //abs value for positive space
@@ -151,11 +151,13 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
 
      if (InstanceID() == 0)
     {
-        roughness = roughnessTex.SampleLevel(tempSampler, baryuv, 0).rgb;
-        metallic = metallicTex.SampleLevel(tempSampler, baryuv, 0).rgb;
-        hitColor = albedoTex.SampleLevel(tempSampler, baryuv, 0).rgb;
+        roughness = roughnessTex.SampleLevel(tempSampler, baryuv * 10.0, 0).r;
+        metallic = metallicTex.SampleLevel(tempSampler, baryuv * 10.0, 0).r;
+        hitColor = albedoTex.SampleLevel(tempSampler, baryuv * 10.0, 0).rgb;
       //  hitColor = float3(0.23, 0.7, 0.1);
     }
+
+
     
     f0 = lerp(f0, hitColor, float3(metallic,metallic,metallic));
 
@@ -173,7 +175,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     {
 
 
-    t_normal = normalTex.SampleLevel(tempSampler, baryuv, 0).rgb * 2.0 - 1.0;
+    t_normal = normalTex.SampleLevel(tempSampler, baryuv * 10.0, 0).rgb * 2.0 - 1.0;
      t_normal = normalize(mul(perInstance[InstanceID()].objectToWorldNormal, float4(t_normal, 0.f)).xyz);
       normal = normalize(mul(perInstance[InstanceID()].objectToWorldNormal, float4(normal_, 0.f)).xyz + (t_normal *0.3));
     }
@@ -192,7 +194,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     
     float3 worldOrigin = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
     
-    float3 lightPos = float3(4, 20, -4);
+    float3 lightPos = float3(4, 10, 10);
     float3 centerLightDir = normalize(lightPos - worldOrigin);
     //bool isBackFacing = dot(normal, WorldRayDirection()) > 0.0f;
 
@@ -257,7 +259,7 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
         isShadowed = shadowPayload.ishit;
     }
     float3 halfway = normalize(view_direction + centerLightDir);
-
+   
    
     float nDotL = max(0.f, dot(normal, centerLightDir));
     float nDotV = max(0.f, dot(normal, view_direction));
@@ -294,8 +296,8 @@ void ClosestHit(inout HitInfo payload, Attributes attrib)
     {
         HitInfo reflectionPayload;
         reflectionPayload.colorAndDistance = float4(0.0, 0.0, 0.0, 0.0);
-        float3 halfway = sampleMicrofacet(attrib.bary, roughness, normal);
-        float3 reflectedDirection = reflect(-view_direction,halfway);
+        float3 microfacet = sampleMicrofacet(attrib.bary, roughness, normal);
+        float3 reflectedDirection = reflect(-view_direction,microfacet);
 
         //float3 checkreflect = reflection * reflection;
         reflectionPayload.canReflect = false;

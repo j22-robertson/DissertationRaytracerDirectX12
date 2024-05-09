@@ -41,6 +41,8 @@ void RenderApplication::createDepthBuffer()
 void RenderApplication::CreateCameraBuffer()
 {
 
+
+
 	uint32_t nbMatrix = 4; // View, Perspective, View inv, Perspective inv
 
 	cameraBufferSize = nbMatrix * sizeof(DirectX::XMMATRIX);
@@ -62,7 +64,6 @@ void RenderApplication::CreateCameraBuffer()
 	device->CreateConstantBufferView(&cbvDesc, srvHandle);
 
 
-	// TODO: Move creation of PerInstanceProperties view out of this function
 	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
@@ -441,6 +442,8 @@ bool RenderApplication::InitD3D()
 
 	bool adapterFound = false;
 
+
+	//Check all GPU adapters
 	while (dxgiFactory->EnumAdapters1(adapterIndex, &adapter) != DXGI_ERROR_NOT_FOUND)
 	{
 		DXGI_ADAPTER_DESC1 desc;
@@ -738,6 +741,7 @@ bool RenderApplication::InitD3D()
 		return false;
 	}
 	modelResourceHandler->loadFromObj("teapotuv.obj", device, commandList, "TEAPOT");
+	modelResourceHandler->loadFromObj("cube.obj", device, commandList, "CUBE");
 
 
 
@@ -974,10 +978,10 @@ bool RenderApplication::InitD3D()
 	LoadTextureFromFile(L"BrickWall29_1K_BaseColor.png","TEST");
 
 
-	LoadTextureFromFile(L"rusty-ribbed-metal_albedo.png", "ALBEDO");
-	LoadTextureFromFile(L"rusty-ribbed-metal_metallic.png", "METAL");
-	LoadTextureFromFile(L"rusty-ribbed-metal_normal-dx.png", "NORMAL");
-	LoadTextureFromFile(L"rusty-ribbed-metal_roughness.png", "ROUGHNESS");
+///	LoadTextureFromFile(L"rusty-ribbed-metal_albedo.png", "ALBEDO");
+///	LoadTextureFromFile(L"rusty-ribbed-metal_metallic.png", "METAL");
+//	LoadTextureFromFile(L"rusty-ribbed-metal_normal-dx.png", "NORMAL");
+//	LoadTextureFromFile(L"rusty-ribbed-metal_roughness.png", "ROUGHNESS");
 
 //	LoadTextureFromFile(L"clay-shingles1_albedo.png", "ALBEDO");
 //	LoadTextureFromFile(L"clay-shingles1_metallic.png", "METAL");
@@ -990,10 +994,10 @@ bool RenderApplication::InitD3D()
 
 
 
-//	LoadTextureFromFile(L"textured-aluminum_albedo.png", "ALBEDO");
-//	LoadTextureFromFile(L"textured-aluminum_metallic.png", "METAL");
-//	LoadTextureFromFile(L"textured-aluminum_normal-dx.png", "NORMAL");
-//	LoadTextureFromFile(L"textured-aluminum_roughness.png", "ROUGHNESS");
+	LoadTextureFromFile(L"textured-aluminum_albedo.png", "ALBEDO");
+	LoadTextureFromFile(L"textured-aluminum_metallic.png", "METAL");
+	LoadTextureFromFile(L"textured-aluminum_normal-dx.png", "NORMAL");
+	LoadTextureFromFile(L"textured-aluminum_roughness.png", "ROUGHNESS");
 	CreateRaytracingOutputBuffer();
 
 
@@ -1233,7 +1237,11 @@ void RenderApplication::UpdatePipeline()
 		ImGui::SliderFloat("Speed", &rotspeed, 0.0, 2.0);
 	///	ImGui::SliderFloat("Size", &size, 1.0, 10.0);
 		ImGui::End();
-
+		ImGui::Begin("RotationSpeed");
+		ImGui::Text("Framrate: %d" , timer.GetFramesPerSecond());
+		ImGui::End();
+		///	ImGui::SliderFloat("Size", &size, 1.0, 10.0);
+		ImGui::End();
 		ImGui::Render();
 
 	WaitForPreviousFrame();
@@ -1301,7 +1309,7 @@ void RenderApplication::UpdatePipeline()
 
 		commandList->IASetVertexBuffers(0, 1, &modelResourceHandler->getModelVertexBufferView("TEAPOT"));
 
-		commandList->IASetIndexBuffer(&indexBufferView);
+	//	commandList->IASetIndexBuffer(&indexBufferView);
 
 
 		//commandList->IASetIndexBuffer(&indexBufferView);
@@ -1765,6 +1773,50 @@ void RenderApplication::CreateTopLevelAS(const std::vector<std::pair<Microsoft::
 
 }
 
+
+
+void RenderApplication::CreateNamedTopLevelAS(const std::vector<std::pair<Microsoft::WRL::ComPtr<ID3D12Resource>, DirectX::XMMATRIX>>& instances, bool updateOnly, std::string name)
+{
+	if (!updateOnly)
+	{
+		for (size_t i = 0; i < instances.size(); i++)
+		{
+
+			topLevelASGenerator.AddInstance(
+				instances[i].first.Get(),
+				instances[i].second,
+				static_cast<UINT>(i),
+				static_cast<UINT>(2 * i)
+			);
+		}
+
+
+		// Just like BLAS requires scratch space in addition to actual AS
+		// Unlike BLAS with TLAS instance descriptors need to be stored in GPU memory
+		// this call outputs memory requirements for each (scratch, results, instance descriptors) so that the correct amount of memory can be allocated
+
+
+		UINT64 scratchSize, resultSize, instanceDescSize;
+
+		topLevelASGenerator.ComputeASBufferSizes(device, true, &scratchSize, &resultSize, &instanceDescSize);
+
+		scenes[name].pScratch = nv_helpers_dx12::CreateBuffer(device, scratchSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nv_helpers_dx12::kDefaultHeapProps);
+
+		scenes[name].pResult = nv_helpers_dx12::CreateBuffer(device, resultSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nv_helpers_dx12::kDefaultHeapProps);
+
+		scenes[name].pInstanceDesc = nv_helpers_dx12::CreateBuffer(device, instanceDescSize, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_GENERIC_READ, nv_helpers_dx12::kUploadHeapProps);
+	}
+
+	topLevelASGenerator.Generate(commandList,
+		scenes[name].pScratch.Get(),
+		scenes[name].pResult.Get(),
+		scenes[name].pInstanceDesc.Get(),
+		updateOnly,
+		scenes[name].pResult.Get());
+
+
+}
+
 void RenderApplication::CreateAccelerationStructures()
 {
 	HRESULT hr;
@@ -1783,6 +1835,18 @@ void RenderApplication::CreateAccelerationStructures()
 
 	CreateTopLevelAS(instances, false);
 
+
+
+//	AccelerationStructureBuffers bottomLevelBuffersSceneTwo = CreateBottomLevelAS({ { modelResourceHandler->getVertexBuffer("CUBE"),modelResourceHandler->getModelVertNumber("CUBE")} }, 
+//		{ {modelResourceHandler->getIndexBuffer("TEAPOT"),modelResourceHandler->getModelIndexNumber("CUBE")} });
+
+
+//	scenetwo_instances= { {bottomLevelBuffersSceneTwo.pResult, DirectX::XMMatrixIdentity()},
+//	{bottomLevelBuffersSceneTwo.pResult, DirectX::XMMatrixTranslation(-1.0,0,0) },
+//	{bottomLevelBuffersSceneTwo.pResult, DirectX::XMMatrixTranslation(1.0,0,0)}, };
+//	CreateNamedTopLevelAS(scenetwo_instances, false, "TEST");
+	
+	//CreateScene2(scenetwo_instances, false,"TEST");
 	commandList->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { commandList };
@@ -2187,4 +2251,145 @@ void RenderApplication::CreateShaderBindingTable()
 	}
 
 	sbtHelper.Generate(sbtStorage.Get(), rtStateObjectProps.Get());
+}
+
+void RenderApplication::CreateScene2()
+{
+
+	SceneTwoHeap = nv_helpers_dx12::CreateDescriptorHeap(device, 11, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, true);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = SceneTwoHeap->GetCPUDescriptorHandleForHeapStart();
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC UAVDesc = {};
+
+	// The Create X view methods write the view info directly into srvHandle
+	UAVDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+
+	device->CreateUnorderedAccessView(outputResource.Get(), nullptr, &UAVDesc, srvHandle);
+
+	// Add TLAS shader resource view after raytracing output buffer
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.RaytracingAccelerationStructure.Location =scenes["TEST"].pResult->GetGPUVirtualAddress();
+
+	device->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+
+	cbvDesc.BufferLocation = cameraBuffer->GetGPUVirtualAddress();
+	cbvDesc.SizeInBytes = cameraBufferSize;
+	device->CreateConstantBufferView(&cbvDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC perInstanceViewDesc;
+	perInstanceViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	perInstanceViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+	perInstanceViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	perInstanceViewDesc.Buffer.FirstElement = 0;
+	perInstanceViewDesc.Buffer.NumElements = static_cast<UINT>(instances.size());
+	perInstanceViewDesc.Buffer.StructureByteStride = sizeof(PerInstanceProperties);
+	perInstanceViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+	device->CreateShaderResourceView(perInstancePropertiesBuffer.Get(), &perInstanceViewDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC bgDesc = {};
+
+	bgDesc.BufferLocation = backgroundColor->GetGPUVirtualAddress();
+	bgDesc.SizeInBytes = sizeof(DirectX::XMVECTOR) * 16;
+	device->CreateConstantBufferView(&bgDesc, srvHandle);
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC envmap_srvDesc = {};
+	envmap_srvDesc.Format = image->GetMetadata().format;
+	envmap_srvDesc.Texture2D.MipLevels = image->GetMetadata().mipLevels;
+
+
+	envmap_srvDesc.Texture2D.ResourceMinLODClamp = 0;
+	envmap_srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	envmap_srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	device->CreateShaderResourceView(env_texture.Get(), &envmap_srvDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC testTextureDesc = {};
+
+	testTextureDesc.Format = textureMetaData["TEST"].format;
+	testTextureDesc.Texture2D.MipLevels = textureMetaData["TEST"].mipLevels;
+
+	testTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	testTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	testTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["TEST"].Get(), &testTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_SHADER_RESOURCE_VIEW_DESC albedoTextureDesc = {};
+
+	albedoTextureDesc.Format = textureMetaData["ALBEDO"].format;
+	albedoTextureDesc.Texture2D.MipLevels = textureMetaData["ALBEDO"].mipLevels;
+
+	albedoTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	albedoTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	albedoTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["ALBEDO"].Get(), &albedoTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_SHADER_RESOURCE_VIEW_DESC metalTextureDesc = {};
+
+	metalTextureDesc.Format = textureMetaData["METAL"].format;
+	metalTextureDesc.Texture2D.MipLevels = textureMetaData["METAL"].mipLevels;
+
+	metalTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	metalTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	metalTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["METAL"].Get(), &metalTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC roughnessTextureDesc = {};
+
+	roughnessTextureDesc.Format = textureMetaData["ROUGHNESS"].format;
+	roughnessTextureDesc.Texture2D.MipLevels = textureMetaData["ROUGHNESS"].mipLevels;
+
+	roughnessTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	roughnessTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	roughnessTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["ROUGHNESS"].Get(), &roughnessTextureDesc, srvHandle);
+
+
+	srvHandle.ptr += device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC normalTextureDesc = {};
+	normalTextureDesc.Format = textureMetaData["NORMAL"].format;
+	normalTextureDesc.Texture2D.MipLevels = textureMetaData["NORMAL"].mipLevels;
+
+	normalTextureDesc.Texture2D.ResourceMinLODClamp = 0;
+	normalTextureDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	normalTextureDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	device->CreateShaderResourceView(textures["NORMAL"].Get(), &normalTextureDesc, srvHandle);
+
 }
